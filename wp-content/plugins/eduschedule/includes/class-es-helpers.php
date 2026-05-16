@@ -1,0 +1,137 @@
+<?php
+if ( ! defined( 'ABSPATH' ) ) exit;
+
+class ES_Helpers {
+
+    public static function settings() {
+        return wp_parse_args( get_option( 'es_settings', array() ), array(
+            'site_name'        => get_bloginfo( 'name' ),
+            'work_country'     => 'IN',
+            'work_timezone'    => 'Asia/Kolkata',
+            'platforms'        => array( 'Zoom', 'Google Meet', 'Microsoft Teams' ),
+            'default_platform' => 'Zoom',
+            'register_open'    => 1,
+            'login_page_id'    => 0,
+            'register_page_id' => 0,
+            'dashboard_page_id'=> 0,
+        ) );
+    }
+
+    /** Country -> default timezone map (most common defaults) */
+    public static function countries() {
+        return array(
+            'IN' => array( 'name' => 'India',          'tz' => 'Asia/Kolkata' ),
+            'US' => array( 'name' => 'United States',  'tz' => 'America/New_York' ),
+            'GB' => array( 'name' => 'United Kingdom', 'tz' => 'Europe/London' ),
+            'CA' => array( 'name' => 'Canada',         'tz' => 'America/Toronto' ),
+            'AU' => array( 'name' => 'Australia',      'tz' => 'Australia/Sydney' ),
+            'DE' => array( 'name' => 'Germany',        'tz' => 'Europe/Berlin' ),
+            'FR' => array( 'name' => 'France',         'tz' => 'Europe/Paris' ),
+            'AE' => array( 'name' => 'United Arab Emirates', 'tz' => 'Asia/Dubai' ),
+            'SG' => array( 'name' => 'Singapore',      'tz' => 'Asia/Singapore' ),
+            'JP' => array( 'name' => 'Japan',          'tz' => 'Asia/Tokyo' ),
+            'PK' => array( 'name' => 'Pakistan',       'tz' => 'Asia/Karachi' ),
+            'BD' => array( 'name' => 'Bangladesh',     'tz' => 'Asia/Dhaka' ),
+            'NP' => array( 'name' => 'Nepal',          'tz' => 'Asia/Kathmandu' ),
+            'LK' => array( 'name' => 'Sri Lanka',      'tz' => 'Asia/Colombo' ),
+            'NZ' => array( 'name' => 'New Zealand',    'tz' => 'Pacific/Auckland' ),
+            'ZA' => array( 'name' => 'South Africa',   'tz' => 'Africa/Johannesburg' ),
+            'SA' => array( 'name' => 'Saudi Arabia',   'tz' => 'Asia/Riyadh' ),
+            'BR' => array( 'name' => 'Brazil',         'tz' => 'America/Sao_Paulo' ),
+            'MX' => array( 'name' => 'Mexico',         'tz' => 'America/Mexico_City' ),
+            'PH' => array( 'name' => 'Philippines',    'tz' => 'Asia/Manila' ),
+        );
+    }
+
+    public static function tz_for_country( $code ) {
+        $list = self::countries();
+        return isset( $list[ $code ] ) ? $list[ $code ]['tz'] : 'UTC';
+    }
+
+    /** Returns the work timezone (admin's timezone) as DateTimeZone */
+    public static function work_tz() {
+        $s = self::settings();
+        try { return new DateTimeZone( $s['work_timezone'] ); } catch ( Exception $e ) { return new DateTimeZone( 'UTC' ); }
+    }
+
+    /** Returns user's display timezone (from user_meta or work tz fallback) */
+    public static function user_tz( $user_id = null ) {
+        $user_id = $user_id ?: get_current_user_id();
+        if ( ! $user_id ) return self::work_tz();
+        $tz = get_user_meta( $user_id, 'es_timezone', true );
+        if ( $tz ) {
+            try { return new DateTimeZone( $tz ); } catch ( Exception $e ) {}
+        }
+        $country = get_user_meta( $user_id, 'es_country', true );
+        if ( $country ) {
+            return new DateTimeZone( self::tz_for_country( $country ) );
+        }
+        return self::work_tz();
+    }
+
+    /** Slot type config */
+    public static function slot_types() {
+        return array(
+            '1to1'     => array( 'label' => '1:1 Call',     'color' => '#3b82f6', 'description' => 'One-on-one. Capacity 1.' ),
+            'group'    => array( 'label' => 'Group Call',   'color' => '#10b981', 'description' => 'Group session. Multiple users can book.' ),
+            'open'     => array( 'label' => 'Open Slot',    'color' => '#8b5cf6', 'description' => 'Drop-in slot.' ),
+            'personal' => array( 'label' => 'Personal',     'color' => '#ec4899', 'description' => 'Personal time. Not bookable by users.' ),
+        );
+    }
+
+    public static function slot_type_color( $type ) {
+        $types = self::slot_types();
+        return isset( $types[ $type ] ) ? $types[ $type ]['color'] : '#6b7280';
+    }
+
+    public static function slot_type_label( $type ) {
+        $types = self::slot_types();
+        return isset( $types[ $type ] ) ? $types[ $type ]['label'] : $type;
+    }
+
+    public static function platforms() {
+        $s = self::settings();
+        return ! empty( $s['platforms'] ) ? $s['platforms'] : array( 'Zoom' );
+    }
+
+    /** Calculate end time (HH:MM) given start (HH:MM) + duration in minutes */
+    public static function calc_end_time( $start, $duration ) {
+        if ( ! $start ) return '';
+        $parts = explode( ':', $start );
+        if ( count( $parts ) < 2 ) return '';
+        $total = intval( $parts[0] ) * 60 + intval( $parts[1] ) + intval( $duration );
+        $total = ( ( $total % 1440 ) + 1440 ) % 1440;
+        return sprintf( '%02d:%02d', floor( $total / 60 ), $total % 60 );
+    }
+
+    public static function valid_date( $d ) {
+        return is_string( $d ) && preg_match( '/^\d{4}-\d{2}-\d{2}$/', $d ) && strtotime( $d ) !== false;
+    }
+
+    /** Convert work-tz time (Y-m-d H:i:s) to user's tz, return DateTime in user tz */
+    public static function to_user_tz( $datetime_str_work_tz, $user_id = null ) {
+        $work = self::work_tz();
+        $user = self::user_tz( $user_id );
+        try {
+            $dt = new DateTime( $datetime_str_work_tz, $work );
+            $dt->setTimezone( $user );
+            return $dt;
+        } catch ( Exception $e ) { return null; }
+    }
+
+    /** Format user-facing time for a slot (in user's timezone) */
+    public static function slot_user_time( $slot_date, $start_time, $user_id = null ) {
+        $dt = self::to_user_tz( $slot_date . ' ' . $start_time, $user_id );
+        return $dt ? $dt->format( 'g:i A' ) : $start_time;
+    }
+
+    /** Pretty TZ label "Asia/Kolkata (IST, +05:30)" */
+    public static function tz_label( DateTimeZone $tz ) {
+        $now = new DateTime( 'now', $tz );
+        return $tz->getName() . ' (' . $now->format( 'T, P' ) . ')';
+    }
+
+    public static function admin_capability() {
+        return apply_filters( 'eduschedule_admin_capability', 'manage_options' );
+    }
+}

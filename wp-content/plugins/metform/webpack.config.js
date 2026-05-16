@@ -1,0 +1,1 @@
+const defaultConfig=require("@wordpress/scripts/config/webpack.config"),path=require("path");module.exports={...defaultConfig,entry:{"add-new-form-modal":path.resolve(process.cwd(),"src/add-new-form-modal","index.js")},output:{path:path.resolve(process.cwd(),"build"),filename:"[name].js"}};

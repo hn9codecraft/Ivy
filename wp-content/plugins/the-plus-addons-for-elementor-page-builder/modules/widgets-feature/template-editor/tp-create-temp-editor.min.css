@@ -1,0 +1,246 @@
+/** Live Template Editor*/
+.tp-live-editor-btn a {
+    cursor: pointer
+}
+
+.tp-live-editor-main {
+    position: fixed;
+    height: 100%;
+    width: 100%;
+    bottom: 0;
+    left: 0;
+    background-color: rgb(0 0 0 / .8);
+    z-index: 9999;
+    height: 100%;
+    width: 100%;
+    display: flex;
+    align-content: center;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column
+}
+
+.tp-live-editor-main .tp-live-editor-wrapper {
+    height: 100%;
+    width: 100%;
+    display: flex;
+    align-content: center;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column
+}
+
+.tp-live-editor-main .tp-live-editor-header {
+    display: flex;
+    height: 7%;
+    background: #f1f3f7;
+    background-color: #fff0;
+    background-image: linear-gradient(90deg,#6f14f1,#6660ef 128.29%);
+    z-index: 111;
+    box-shadow: 0 1px 15px 0 #00000070
+}
+
+.tp-live-editor-main .tp-live-editor-iframe {
+    display: flex;
+    height: 80%
+}
+
+.tp-live-editor-main .tp-live-editor-iframe iframe {
+    width: 100%;
+    height: 100%;
+    z-index: 11
+}
+
+.tp-live-editor-main .tp-logo {
+    display: flex;
+    width: 30%;
+    justify-content: flex-start;
+    align-items: center;
+    margin-left: 2%;
+    gap: 15px;
+}
+
+.tp-live-editor-main .tp_controler {
+    display: flex;
+    width: 10%
+}
+
+.tp-live-editor-main .tp_controler img {
+    height: 25px
+}
+
+.tp-live-editor-main .tp-le-max,
+.tp-le-close {
+    cursor: pointer;
+    width: 35%;
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    text-align: center
+}
+
+.tp-live-editor-main .tp-le-max{
+    font-size: 20px;
+}
+
+.tp-le-close{
+    font-size: 18px;
+}
+
+.tp-live-create {
+    cursor: pointer
+}
+
+.tp-live-editor-main #tp-title-le {
+    width: 40%;
+    height: 60%;
+    color: #000;
+    margin: 10px 0 20px 20px;
+    border: solid 1px #fff;
+    border-radius: 2px 0 0 2px;
+    background: #fff
+}
+
+.tp-live-editor-main .tp-title-change-edit,
+.tp-title-change {
+    cursor: pointer;
+    width: 10%;
+    height: 60%;
+    margin: 10px 0;
+    border: none;
+    border-radius: 0 2px 2px 0;
+    font-size: 12px
+}
+
+.tp-live-editor-main .tp-logo img {
+    position: relative;
+    width: 10%;
+}
+
+.tp-live-editor-main .tp-logo h6 {
+    color: #fff;
+    font-family: 'Roboto';
+    font-size: 16px;
+    font-weight: 500
+}
+
+.tp-live-create-btn .tp-live-create,
+.tp-live-editor-btn .tp-live-editor {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    padding: 7px 10px;
+    background: #e6e9ec;
+    /* background: var(--e-a-bg-loading); */
+    border-radius: 3px
+}
+
+.tp-live-editor-btn .tp-live-editor:hover,
+.tp-live-create-btn .tp-live-create:hover{
+    color: var(--e-a-color-accent-promotion);
+    border-block-end-color: transparent !important;
+}
+
+.tp-live-editor-main .tp-pre-loader img {
+    width: 40%
+}
+
+.tp-live-editor-main .tp-title-input {
+    display: flex;
+    width: 70%
+}
+
+@media only screen and (max-width:1350px) {
+    .tp-live-editor-main .tp-logo {
+        width: 50%
+    }
+
+    .tp-live-editor-main #tp-title-le {
+        width: 50%
+    }
+
+    .tp-live-editor-main .tp-title-change-edit,
+    .tp-title-change {
+        width: 15%
+    }
+
+    .tp-live-editor-main .tp_controler {
+        width: 15%
+    }
+}
+
+@media only screen and (max-width:1050px) {
+    .tp-live-editor-main .tp-logo {
+        width: 60%
+    }
+
+    .tp-live-editor-main #tp-title-le {
+        width: 65%
+    }
+
+    .tp-live-editor-main .tp-title-change-edit,
+    .tp-title-change {
+        width: 25%
+    }
+
+    .tp-live-editor-main .tp_controler {
+        width: 15%
+    }
+}
+
+@media only screen and (max-width:890px) {
+    .tp-live-editor-main .tp-logo h6 {
+        font-size: 13px
+    }
+
+    .tp-live-editor-main .tp_controler div {
+        padding: 0 3px
+    }
+
+    .tp-live-editor-main .tp_controler {
+        width: 20%
+    }
+}
+
+@media only screen and (max-width:770px) {
+    .tp-live-editor-main .tp-logo h6 {
+        font-size: 12px;
+        display: none;
+        transition: all .3s ease
+    }
+
+    .tp-live-editor-main .tp-logo {
+        width: 10%
+    }
+
+    .tp-live-editor-main #tp-title-le {
+        width: 50%
+    }
+
+    .tp-live-editor-main .tp-title-change-edit,
+    .tp-title-change {
+        width: 30%;
+        padding: 0 5px
+    }
+
+    .tp-live-editor-main .tp_controler {
+        width: 20%
+    }
+
+    .tp-live-editor-main .tp_controler div {
+        padding: 0 3px
+    }
+}
+
+@media only screen and (max-width:600px) {
+    .tp-live-editor-main .tp-logo {
+        width: 15%
+    }
+
+    .tp-live-editor-main .tp_controler {
+        width: 25%
+    }
+}
+
+/** Live Template Editor*/
