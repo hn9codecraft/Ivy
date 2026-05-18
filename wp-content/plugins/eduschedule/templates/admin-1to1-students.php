@@ -95,7 +95,8 @@ $base = admin_url( 'admin.php?page=eduschedule-1to1' );
                         <?php endif; ?>
                         <div style="display:flex;gap:10px;flex-wrap:wrap;font-size:12px;">
                             <?php if ( $pkg->price > 0 ) : ?>
-                                <span style="color:#6366f1;font-weight:600;">₹<?php echo number_format( $pkg->price, 0 ); ?></span>
+                                <?php $cur = ! empty( $pkg->currency ) ? $pkg->currency : 'INR'; ?>
+                                <span style="color:#6366f1;font-weight:600;"><?php echo esc_html( ES_Helpers::format_price( $pkg->price, $cur ) ); ?></span>
                             <?php endif; ?>
                             <?php if ( $pkg->hours > 0 ) : ?>
                                 <span style="color:rgba(255,255,255,0.7);"><?php echo (int) $pkg->hours; ?> hrs</span>

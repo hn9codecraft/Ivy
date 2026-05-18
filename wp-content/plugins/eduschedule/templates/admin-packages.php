@@ -47,11 +47,27 @@ $base = admin_url( 'admin.php?page=eduschedule-packages' );
                 </div>
 
                 <div class="es-package-price">
-                    ₹<?php echo number_format( $pkg->price, 0 ); ?>
+                    <?php
+                    $cur = ! empty( $pkg->currency ) ? $pkg->currency : 'INR';
+                    echo esc_html( ES_Helpers::format_price( $pkg->price, $cur ) );
+                    ?>
                     <?php if ( ! empty( $pkg->tagline ) ) : ?>
                         <span class="es-package-period">/ <?php echo esc_html( $pkg->tagline ); ?></span>
                     <?php endif; ?>
                 </div>
+
+                <?php
+                $s_yd = (float) ( ES_Helpers::settings()['yearly_discount'] ?? 0 );
+                if ( (float) $pkg->price > 0 && $s_yd > 0 ) :
+                    $gross = (float) $pkg->price * 12;
+                    $net   = $gross * ( 1 - ( $s_yd / 100 ) );
+                ?>
+                    <div class="es-package-yearly">
+                        <span class="dashicons dashicons-calendar-alt"></span>
+                        Yearly: <?php echo esc_html( ES_Helpers::format_price( $net, $cur ) ); ?>
+                        <small>(<?php echo esc_html( rtrim( rtrim( number_format( $s_yd, 1 ), '0' ), '.' ) ); ?>% off)</small>
+                    </div>
+                <?php endif; ?>
 
                 <?php if ( ! empty( $pkg->hours ) ) : ?>
                     <div class="es-package-hours">
@@ -100,12 +116,18 @@ $base = admin_url( 'admin.php?page=eduschedule-packages' );
 
             <div class="es-modal-row">
                 <div class="es-field">
-                    <label class="es-label">Price (₹)</label>
-                    <input type="number" id="es-pkg-price" placeholder="15000" step="0.01" />
+                    <label class="es-label">Currency</label>
+                    <select id="es-pkg-currency">
+                        <?php foreach ( ES_Helpers::currencies() as $code => $info ) : ?>
+                            <option value="<?php echo esc_attr( $code ); ?>">
+                                <?php echo esc_html( $info['symbol'] . '  ' . $code . ' — ' . $info['name'] ); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
                 </div>
                 <div class="es-field">
-                    <label class="es-label">Hours</label>
-                    <input type="number" id="es-pkg-hours" placeholder="24" />
+                    <label class="es-label">Price (Monthly)</label>
+                    <input type="number" id="es-pkg-price" placeholder="15000" step="0.01" min="0" />
                 </div>
             </div>
 
@@ -113,25 +135,16 @@ $base = admin_url( 'admin.php?page=eduschedule-packages' );
                 <label class="es-label">Tagline / Period</label>
                 <input type="text" id="es-pkg-tagline" placeholder="3 months program" />
             </div>
-
+            <div class="es-field">
+                <label class="es-label">Display Order</label>
+                <input type="number" id="es-pkg-order" placeholder="0" value="0" />
+                <small class="es-field-hint">Lower numbers appear first. New packages are visible to students by default.</small>
+            </div>
             <div class="es-field">
                 <label class="es-label">Full Description</label>
                 <textarea id="es-pkg-description" rows="6" placeholder="• 24 sessions of 1-hour each&#10;• Speaking, Writing, Reading & Listening&#10;• Mock tests every 2 weeks&#10;• Personalized feedback on every essay"></textarea>
             </div>
-
-            <div class="es-modal-row">
-                <div class="es-field">
-                    <label class="es-label">Display Order</label>
-                    <input type="number" id="es-pkg-order" placeholder="0" value="0" />
-                    <small class="es-field-hint">Lower numbers appear first</small>
-                </div>
-                <div class="es-field">
-                    <label class="es-checkbox-row">
-                        <input type="checkbox" id="es-pkg-active" checked />
-                        <span>Active (visible to students)</span>
-                    </label>
-                </div>
-            </div>
+            <input type="hidden" id="es-pkg-active" value="1" />
         </div>
         <div class="es-modal-foot">
             <button type="button" class="es-btn es-btn-ghost es-modal-close">Cancel</button>
@@ -224,6 +237,22 @@ $base = admin_url( 'admin.php?page=eduschedule-packages' );
     width: 16px;
     height: 16px;
 }
+
+.es-package-yearly {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: rgba(16,185,129,0.12);
+    color: #10b981;
+    border-radius: 6px;
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 12px;
+    margin-left: 6px;
+}
+.es-package-yearly .dashicons { font-size: 16px; width: 16px; height: 16px; }
+.es-package-yearly small { opacity: 0.8; font-weight: 400; }
 
 .es-package-desc {
     font-size: 14px;

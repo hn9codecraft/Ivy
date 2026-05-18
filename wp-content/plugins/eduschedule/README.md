@@ -1,8 +1,31 @@
-# EduSchedule v3.5.0
+# EduSchedule v3.9.0
 
-A modern booking platform for educators, coaches, and consultants. Frontend register/login/dashboard with a pink theme, dark indigo admin, slot-based bookings (1:1 / Group / Open / Personal), Zoom auto-create, and country-aware timezones.
+A modern booking platform for educators, coaches, and consultants. Frontend register/login/dashboard with a pink theme, dark indigo admin, slot-based bookings (1:1 / Group / Open / Personal), Zoom auto-create, country-aware timezones, and **public pricing page with Stripe Checkout and multi-currency Monthly / Yearly billing**.
 
 > Designed to run **alongside** the original Course Booking Calendar (v2.x) — separate plugin slug, separate database tables, no conflicts.
+
+## What's New in v3.9.0
+
+- **Public pricing page with self-serve Stripe Checkout.** The `[eduschedule_packages]` shortcode now works as a real pricing page for any visitor — not just personalised links. When Stripe is enabled, each card shows a *Select This Plan* button that opens a small modal collecting name + email, then redirects the buyer to the hosted Stripe Checkout page. After payment, a WP user account is created automatically (or matched if the email already exists), the package is assigned, the validity period is set, and a confirmation email is sent. The "Contact Us" fallback only shows when Stripe is disabled.
+- **Hosted Stripe Checkout is now the default flow** for the personalised "Decision Hub" link as well. Clicking *Select This Plan* on a tokenized link redirects to Stripe's hosted page instead of opening an inline form on your site. This is more secure (card data never touches your server, PCI-DSS SAQ-A), supports more payment methods automatically (Apple Pay, Google Pay, regional methods), and gives a more familiar checkout experience. The inline Elements code remains in place for backwards compatibility but is no longer the primary path.
+- **Monthly / Yearly toggle is now visible on public pricing pages** (not only personalised links). The discount % shown in the toggle label still comes from *Settings → Currency & Billing → Yearly Discount*.
+- **Cleaner admin pricing model.** The admin only enters one number per package: the **monthly price**. The frontend toggle automatically computes yearly = `monthly × 12 − global discount %`. There are no per-package yearly fields, no Stripe Price IDs to wire up, no extra subscription configuration. Both the customer-facing card AND the amount charged in Stripe use the same formula, so what the buyer sees is exactly what they pay.
+
+## What's New in v3.8.0
+
+- **Inline on-page Stripe payment form** matching the personalised "Decision Hub" design. *(Kept available in 3.9 as a legacy fallback; hosted Checkout is now preferred — see above.)*
+- **Pay Monthly / Pay per Semester toggle** with a sliding pill switch directly under the package grid. Toggling updates every card's displayed price AND the amount charged in Stripe, so what the student sees on the card is exactly what gets charged. The discount % shown in the toggle label comes from *Settings → Currency & Billing → Yearly Discount*.
+- **Simplified package creation form.** The admin package modal no longer asks for *Default Billing Cycle*, *Yearly Price (optional)*, or the *Active (visible to students)* checkbox — new packages are active by default, and yearly pricing is derived globally from `monthly × 12 − yearly_discount %`.
+- **After Call form is now always visible** on the student detail page. The toggle button is gone — open a student, scroll past the share-link card, and the After Call section is already there waiting. Email triggers fire to both student and admin the moment you click *Submit & Convert*.
+- **Shortcode attributes for the new layout** — `[eduschedule_packages monthly_label="Pay Monthly" semester_label="Pay per Semester" period_unit="month" period_unit_yearly="semester" brand_name="Ivy Quest Academy" brand_logo="https://.../logo.png" recommended="2" recommendation_text="Based on our consultation, I recommend the Subject Mastery Protocol."]`.
+
+## What's New in v3.7.0
+
+- **After Call is now an inline form** on the student detail page — no more popup.
+- **Stripe Checkout integration** (hosted page flow — kept as fallback in v3.8.0).
+- **Multi-currency on packages** — INR, USD, EUR, GBP, AUD, CAD, AED, SGD, JPY, NZD.
+- **12-month / Yearly billing with one-time payment** — `valid_until = paid_at + 12 months`.
+- **Email triggers on every form submit** — After Call, payment success, non-Stripe selection.
 
 ## What's New in v3.5.0
 

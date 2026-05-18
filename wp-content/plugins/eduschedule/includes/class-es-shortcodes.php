@@ -19,8 +19,21 @@ class ES_Shortcodes {
         wp_enqueue_style( 'dashicons' );
         wp_enqueue_style( 'es-frontend', ES_URL . 'public/css/frontend.css', array( 'dashicons' ), ES_VERSION );
         wp_enqueue_script( 'es-frontend', ES_URL . 'public/js/frontend.js', array( 'jquery' ), ES_VERSION, true );
+
+        // Stripe Elements (loaded from Stripe CDN — required by Stripe's TOS).
+        // Always enqueue so the packages shortcode JS can use it; tiny script, harmless when unused.
+        $stripe_ready = class_exists( 'ES_Stripe' ) && ES_Stripe::is_enabled();
+        if ( $stripe_ready ) {
+            wp_enqueue_script( 'stripe-js', 'https://js.stripe.com/v3/', array(), null, true );
+        }
+
         // Packages JS for public package selection (also handles admin pages safely via class checks)
-        wp_enqueue_script( 'es-packages', ES_URL . 'public/js/packages.js', array( 'jquery', 'es-frontend' ), ES_VERSION, true );
+        $pkg_deps = array( 'jquery', 'es-frontend' );
+        if ( $stripe_ready ) $pkg_deps[] = 'stripe-js';
+        wp_enqueue_script( 'es-packages', ES_URL . 'public/js/packages.js', $pkg_deps, ES_VERSION, true );
+
+        $s = ES_Helpers::settings();
+
         wp_localize_script( 'es-frontend', 'ES_FE', array(
             'ajax_url'      => admin_url( 'admin-ajax.php' ),
             'nonce'         => wp_create_nonce( 'es_fe_nonce' ),         // generic nonce for booking, etc.
@@ -35,6 +48,12 @@ class ES_Shortcodes {
             'countries'     => ES_Helpers::countries(),
             'slot_types'    => ES_Helpers::slot_types(),
             'today'         => current_time( 'Y-m-d' ),
+            // Stripe configuration for the inline Elements form
+            'stripe' => array(
+                'enabled'         => $stripe_ready ? 1 : 0,
+                'publishable_key' => $stripe_ready ? ES_Stripe::publishable_key() : '',
+                'yearly_discount' => (float) ( $s['yearly_discount'] ?? 0 ),
+            ),
         ) );
     }
 
@@ -138,9 +157,29 @@ class ES_Shortcodes {
 
     /**
      * Public packages shortcode
-     * Usage: [eduschedule_packages]
+     * Usage:
+     *   [eduschedule_packages]
+     *   [eduschedule_packages yearly_toggle="no"]
+     *   [eduschedule_packages default_cycle="yearly"]
+     *   [eduschedule_packages monthly_label="Pay Monthly" semester_label="Pay per Semester"]
+     *   [eduschedule_packages brand_name="Ivy Quest Academy" brand_logo="https://.../logo.png"]
+     *   [eduschedule_packages recommended="2" recommendation_text="Based on our consultation, I recommend ..."]
+     *   [eduschedule_packages period_unit="month" period_unit_yearly="semester"]
      */
-    public function packages() {
+    public function packages( $atts = array() ) {
+        $sc_atts = shortcode_atts( array(
+            'yearly_toggle'       => '',
+            'default_cycle'       => 'monthly',
+            'monthly_label'       => 'Pay Monthly',
+            'semester_label'      => 'Pay per Semester',
+            'period_unit'         => 'month',
+            'period_unit_yearly'  => 'semester',
+            'brand_name'          => '',
+            'brand_logo'          => '',
+            'recommended'         => '2',
+            'recommendation_text' => '',
+        ), $atts, 'eduschedule_packages' );
+
         ob_start();
         include ES_DIR . 'templates/public-packages.php';
         return ob_get_clean();

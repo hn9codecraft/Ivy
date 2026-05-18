@@ -2,15 +2,15 @@
 /**
  * Plugin Name: EduSchedule
  * Description: Modern booking platform with frontend register/login, user dashboard, slot-based booking (1:1 / Group / Open / Personal), Zoom auto-create, country-aware timezones.
- * Version: 3.6.0
+ * Version: 3.9.0
  * Author: Your Name
  * Text Domain: eduschedule
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'ES_VERSION', '3.6.0' );
-define( 'ES_DB_VERSION', '1.1.0' ); // bump when DB schema changes
+define( 'ES_VERSION', '3.9.0' );
+define( 'ES_DB_VERSION', '1.2.0' ); // bump when DB schema changes
 define( 'ES_FILE', __FILE__ );
 define( 'ES_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ES_URL', plugin_dir_url( __FILE__ ) );
@@ -21,6 +21,7 @@ require_once ES_DIR . 'includes/class-es-db.php';
 require_once ES_DIR . 'includes/class-es-packages.php';
 require_once ES_DIR . 'includes/class-es-zoom.php';
 require_once ES_DIR . 'includes/class-es-mailer.php';
+require_once ES_DIR . 'includes/class-es-stripe.php';
 require_once ES_DIR . 'includes/class-es-shortcodes.php';
 require_once ES_DIR . 'includes/class-es-ajax.php';
 require_once ES_DIR . 'includes/class-es-auth.php';
@@ -44,4 +45,8 @@ add_action( 'plugins_loaded', function () {
         new ES_Admin();
         new ES_Admin_Ajax();
     }
+
+    // Stripe — return URL + webhook handlers
+    add_action( 'template_redirect', array( 'ES_Stripe', 'handle_return' ) );
+    add_action( 'init', array( 'ES_Stripe', 'handle_webhook' ) );
 } );

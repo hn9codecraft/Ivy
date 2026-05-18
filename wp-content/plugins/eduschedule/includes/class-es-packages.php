@@ -34,6 +34,9 @@ class ES_Packages {
             package_name VARCHAR(255) NOT NULL,
             sub_heading VARCHAR(255) NULL,
             price DECIMAL(10,2) NOT NULL DEFAULT 0,
+            currency VARCHAR(10) NOT NULL DEFAULT 'INR',
+            billing_cycle VARCHAR(20) NOT NULL DEFAULT 'monthly',
+            yearly_price DECIMAL(10,2) NOT NULL DEFAULT 0,
             hours INT NOT NULL DEFAULT 0,
             tagline VARCHAR(255) NULL,
             description TEXT NULL,
@@ -46,6 +49,31 @@ class ES_Packages {
             KEY display_order (display_order)
         ) $charset_collate;";
         dbDelta( $sql );
+
+        // Payments table — for Stripe transactions
+        $sql_payments = "CREATE TABLE {$wpdb->prefix}es_payments (
+            id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
+            user_id BIGINT(20) UNSIGNED NOT NULL,
+            package_id BIGINT(20) UNSIGNED NOT NULL,
+            amount DECIMAL(10,2) NOT NULL DEFAULT 0,
+            currency VARCHAR(10) NOT NULL DEFAULT 'INR',
+            billing_cycle VARCHAR(20) NOT NULL DEFAULT 'monthly',
+            gateway VARCHAR(30) NOT NULL DEFAULT 'stripe',
+            gateway_session_id VARCHAR(190) NULL,
+            gateway_payment_id VARCHAR(190) NULL,
+            status VARCHAR(20) NOT NULL DEFAULT 'pending',
+            valid_from DATETIME NULL,
+            valid_until DATETIME NULL,
+            meta TEXT NULL,
+            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            PRIMARY KEY  (id),
+            KEY user_id (user_id),
+            KEY package_id (package_id),
+            KEY status (status),
+            KEY gateway_session_id (gateway_session_id)
+        ) $charset_collate;";
+        dbDelta( $sql_payments );
 
         // Lead → Package link table
         $sql_links = "CREATE TABLE {$wpdb->prefix}es_lead_packages (
@@ -119,6 +147,9 @@ class ES_Packages {
             'package_name'  => '',
             'sub_heading'   => '',
             'price'         => 0,
+            'currency'      => 'INR',
+            'billing_cycle' => 'monthly',
+            'yearly_price'  => 0,
             'hours'         => 0,
             'tagline'       => '',
             'description'   => '',

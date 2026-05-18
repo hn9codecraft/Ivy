@@ -50,6 +50,42 @@ class ES_DB {
         ) );
     }
 
+    public static function get_slots_in_range_calendar( $from, $to ) {
+
+        global $wpdb;
+
+        $query = $wpdb->prepare(
+            "SELECT 
+                s.*,
+                b.*,
+                u.display_name AS user_name,
+                u.user_email,
+                COUNT(b.id) AS booked_count
+
+            FROM " . self::table('slots') . " s
+
+            INNER JOIN " . self::table('bookings') . " b 
+                ON b.slot_id = s.id
+
+            LEFT JOIN {$wpdb->users} u
+                ON u.ID = b.user_id
+
+            WHERE b.status = %s
+            AND s.slot_date BETWEEN %s AND %s
+
+            GROUP BY s.id
+
+            ORDER BY s.slot_date ASC, s.start_time ASC",
+
+            'confirmed',
+            $from,
+            $to
+        );
+
+        $rows = $wpdb->get_results($query);
+        return ! empty($rows) ? $rows : array();
+    }
+
     /** Get slots in a date range, optionally with booking counts */
     public static function get_slots_in_range( $from, $to ) {
         global $wpdb;
@@ -65,7 +101,7 @@ class ES_DB {
     }
 
     public static function get_slots_for_date( $date ) {
-        return self::get_slots_in_range( $date, $date );
+        return self::get_slots_in_range_calendar( $date, $date );
     }
 
     public static function count_bookings( $slot_id ) {

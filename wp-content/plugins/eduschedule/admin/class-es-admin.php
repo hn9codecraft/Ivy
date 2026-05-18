@@ -313,7 +313,25 @@ class ES_Admin {
         $platforms = array_values( array_filter( array_map( 'trim', preg_split( '/[\r\n]+/', $platforms_raw ) ) ) );
         if ( empty( $platforms ) ) $platforms = array( 'Zoom' );
 
+        // Currency
+        $allowed_currencies = array_keys( ES_Helpers::currencies() );
+        $default_currency = isset( $_POST['default_currency'] ) ? strtoupper( sanitize_text_field( wp_unslash( $_POST['default_currency'] ) ) ) : 'INR';
+        if ( ! in_array( $default_currency, $allowed_currencies, true ) ) $default_currency = 'INR';
+
+        $yearly_discount = isset( $_POST['yearly_discount'] ) ? floatval( $_POST['yearly_discount'] ) : 0;
+        $yearly_discount = max( 0, min( 100, $yearly_discount ) );
+
+        // Stripe
+        $stripe_mode = isset( $_POST['stripe_mode'] ) ? sanitize_text_field( wp_unslash( $_POST['stripe_mode'] ) ) : 'test';
+        if ( ! in_array( $stripe_mode, array( 'test', 'live' ), true ) ) $stripe_mode = 'test';
+
         $current = ES_Helpers::settings();
+
+        // Secrets: if posted field is empty AND we already have one stored, keep the existing value
+        $kept_test_secret    = ( isset( $_POST['stripe_test_secret'] )    && $_POST['stripe_test_secret']    !== '' ) ? sanitize_text_field( wp_unslash( $_POST['stripe_test_secret'] ) )    : $current['stripe_test_secret'];
+        $kept_live_secret    = ( isset( $_POST['stripe_live_secret'] )    && $_POST['stripe_live_secret']    !== '' ) ? sanitize_text_field( wp_unslash( $_POST['stripe_live_secret'] ) )    : $current['stripe_live_secret'];
+        $kept_webhook_secret = ( isset( $_POST['stripe_webhook_secret'] ) && $_POST['stripe_webhook_secret'] !== '' ) ? sanitize_text_field( wp_unslash( $_POST['stripe_webhook_secret'] ) ) : $current['stripe_webhook_secret'];
+
         update_option( 'es_settings', array_merge( $current, array(
             'site_name'        => isset( $_POST['site_name'] ) ? sanitize_text_field( wp_unslash( $_POST['site_name'] ) ) : get_bloginfo( 'name' ),
             'work_country'     => $work_country,
@@ -324,6 +342,20 @@ class ES_Admin {
             'login_page_id'    => isset( $_POST['login_page_id'] ) ? (int) $_POST['login_page_id'] : 0,
             'register_page_id' => isset( $_POST['register_page_id'] ) ? (int) $_POST['register_page_id'] : 0,
             'dashboard_page_id'=> isset( $_POST['dashboard_page_id'] ) ? (int) $_POST['dashboard_page_id'] : 0,
+
+            // Currency / Billing
+            'default_currency' => $default_currency,
+            'yearly_discount'  => $yearly_discount,
+            'enable_yearly'    => ! empty( $_POST['enable_yearly'] ) ? 1 : 0,
+
+            // Stripe
+            'stripe_enabled'        => ! empty( $_POST['stripe_enabled'] ) ? 1 : 0,
+            'stripe_mode'           => $stripe_mode,
+            'stripe_test_pub_key'   => isset( $_POST['stripe_test_pub_key'] ) ? sanitize_text_field( wp_unslash( $_POST['stripe_test_pub_key'] ) ) : '',
+            'stripe_test_secret'    => $kept_test_secret,
+            'stripe_live_pub_key'   => isset( $_POST['stripe_live_pub_key'] ) ? sanitize_text_field( wp_unslash( $_POST['stripe_live_pub_key'] ) ) : '',
+            'stripe_live_secret'    => $kept_live_secret,
+            'stripe_webhook_secret' => $kept_webhook_secret,
         ) ) );
 
         wp_safe_redirect( admin_url( 'admin.php?page=eduschedule-settings&saved=1' ) );

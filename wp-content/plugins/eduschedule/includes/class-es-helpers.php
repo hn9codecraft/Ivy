@@ -14,7 +14,53 @@ class ES_Helpers {
             'login_page_id'    => 0,
             'register_page_id' => 0,
             'dashboard_page_id'=> 0,
+
+            // Currency / Billing
+            'default_currency' => 'INR',
+            'yearly_discount'  => 0,   // percent off when paying yearly (one-time)
+            'enable_yearly'    => 1,   // enable yearly toggle on package shortcode
+
+            // Stripe
+            'stripe_enabled'        => 0,
+            'stripe_mode'           => 'test', // test | live
+            'stripe_test_pub_key'   => '',
+            'stripe_test_secret'    => '',
+            'stripe_live_pub_key'   => '',
+            'stripe_live_secret'    => '',
+            'stripe_webhook_secret' => '',
         ) );
+    }
+
+    /** Currencies supported */
+    public static function currencies() {
+        return array(
+            'INR' => array( 'name' => 'Indian Rupee',     'symbol' => '₹' ),
+            'USD' => array( 'name' => 'US Dollar',        'symbol' => '$' ),
+            'EUR' => array( 'name' => 'Euro',             'symbol' => '€' ),
+            'GBP' => array( 'name' => 'British Pound',    'symbol' => '£' ),
+            'AUD' => array( 'name' => 'Australian Dollar','symbol' => 'A$' ),
+            'CAD' => array( 'name' => 'Canadian Dollar',  'symbol' => 'C$' ),
+            'AED' => array( 'name' => 'UAE Dirham',       'symbol' => 'AED ' ),
+            'SGD' => array( 'name' => 'Singapore Dollar', 'symbol' => 'S$' ),
+            'JPY' => array( 'name' => 'Japanese Yen',     'symbol' => '¥' ),
+            'NZD' => array( 'name' => 'New Zealand Dollar','symbol' => 'NZ$' ),
+        );
+    }
+
+    /** Get currency symbol */
+    public static function currency_symbol( $code ) {
+        $list = self::currencies();
+        $code = strtoupper( $code );
+        return isset( $list[ $code ] ) ? $list[ $code ]['symbol'] : ( $code . ' ' );
+    }
+
+    /** Format a price with the currency symbol */
+    public static function format_price( $amount, $currency = 'INR' ) {
+        $sym = self::currency_symbol( $currency );
+        // Currencies with no decimals
+        $no_decimals = array( 'JPY', 'INR' );
+        $decimals = in_array( strtoupper( $currency ), $no_decimals, true ) ? 0 : 2;
+        return $sym . number_format( (float) $amount, $decimals );
     }
 
     /** Country -> default timezone map (most common defaults) */

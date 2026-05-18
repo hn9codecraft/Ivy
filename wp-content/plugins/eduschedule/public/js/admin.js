@@ -153,34 +153,90 @@
     }
 
     function renderDayModal(d) {
-        var html = '';
-        if (!d.slots.length) {
-            html = '<p class="es-empty-text">No slots on this day. Add one →</p>';
-        } else {
-            d.slots.forEach(function (s) {
-                var isFull = s.booked >= s.capacity;
-                var isPersonal = s.type === 'personal';
-                html += '<div class="es-slot-row" style="--type-color:' + s.type_color + '">';
-                html += '<div class="es-slot-time">' + escapeHtml(s.start) + '</div>';
-                html += '<div class="es-slot-info">';
-                html += '<div class="es-slot-info-top">' + s.duration + ' min · ' + escapeHtml(s.platform);
-                if (s.title) html += ' · ' + escapeHtml(s.title);
+    var html = '';
+    if (!d.slots.length) {
+        html = '<p class="es-empty-text">No slots on this day. Add one →</p>';
+    } else {
+        d.slots.forEach(function (s) {
+            var isFull = parseInt(s.booked) >= parseInt(s.capacity);
+            var isPersonal = s.type === 'personal';
+            html += '<div class="es-slot-row" style="--type-color:' + (s.type_color || '#2271b1') + '">';
+            // Time
+            html += '<div class="es-slot-time">';
+            html += escapeHtml(s.start || '');
+            html += '</div>';
+            // Info
+            html += '<div class="es-slot-info">';
+            // Top Row
+            html += '<div class="es-slot-info-top">';
+            html += parseInt(s.duration || 0) + ' min';
+            if (s.platform) {
+                html += ' · ' + escapeHtml(s.platform);
+            }
+            if (s.title) {
+                html += ' · ' + escapeHtml(s.title);
+            }
+            html += '</div>';
+            // Bottom Row
+            html += '<div class="es-slot-info-sub">';
+            html += escapeHtml(s.type_label || '');
+            html += ' · ' + parseInt(s.booked || 0) + '/' + parseInt(s.capacity || 0) + ' booked';
+            // User Name
+            if (s.user_name) {
+                html += '<div class="es-slot-user">';
+                html += '<span class="dashicons dashicons-admin-users"></span>';
+                html += '<span>' + escapeHtml(s.user_name) + '</span>';
                 html += '</div>';
-                html += '<div class="es-slot-info-sub">' + escapeHtml(s.type_label) + ' · ' + s.booked + '/' + s.capacity + ' booked</div>';
+            } else if (s.users && Array.isArray(s.users) && s.users.length) {
+                html += '<div class="es-slot-user">';
+                html += '<span class="dashicons dashicons-admin-users"></span>';
+                html += '<span>' + escapeHtml(s.users.join(', ')) + '</span>';
                 html += '</div>';
-                html += '<span class="es-slot-status' + (isFull ? ' es-slot-status-full' : '') + '">' + (isFull ? 'FULL' : 'OPEN') + '</span>';
-                html += '<div class="es-slot-actions">';
-                if (!isFull && !isPersonal) {
-                    html += '<button type="button" class="es-slot-book es-book-for-user" data-slot=\'' + JSON.stringify(s).replace(/'/g, '&#39;') + '\' title="Book for a user"><span class="dashicons dashicons-businessperson"></span></button>';
-                }
-                html += '<button type="button" class="es-slot-edit es-edit-slot" data-slot=\'' + JSON.stringify(s).replace(/'/g, '&#39;') + '\' title="Edit"><span class="dashicons dashicons-edit"></span></button>';
-                html += '<button type="button" class="es-slot-del es-delete-slot" data-id="' + s.id + '" title="Delete">×</button>';
-                html += '</div>';
-                html += '</div>';
-            });
-        }
-        $('#es-day-modal-body').html(html);
+            }
+            html += '</div>'; // sub
+            html += '</div>'; // info
+            html += '<span class="es-slot-status';
+            if (isFull) {
+                html += ' es-slot-status-full';
+            }
+            html += '">';
+            html += isFull ? 'FULL' : 'OPEN';
+            html += '</span>';
+            // Actions
+            html += '<div class="es-slot-actions">';
+            // Book Button
+            if (!isFull && !isPersonal) {
+                html += '<button ';
+                html += 'type="button" ';
+                html += 'class="es-slot-book es-book-for-user" ';
+                html += 'data-slot=\'' + JSON.stringify(s).replace(/'/g, '&#39;') + '\' ';
+                html += 'title="Book for a user">';
+                html += '<span class="dashicons dashicons-businessperson"></span>';
+                html += '</button>';
+            }
+
+            // Edit Button
+            html += '<button ';
+            html += 'type="button" ';
+            html += 'class="es-slot-edit es-edit-slot" ';
+            html += 'data-slot=\'' + JSON.stringify(s).replace(/'/g, '&#39;') + '\' ';
+            html += 'title="Edit">';
+            html += '<span class="dashicons dashicons-edit"></span>';
+            html += '</button>';
+            html += '<button ';
+            html += 'type="button" ';
+            html += 'class="es-slot-del es-delete-slot" ';
+            html += 'data-id="' + s.id + '" ';
+            html += 'title="Delete">×</button>';
+            html += '</div>'; // actions
+            html += '</div>'; // row
+
+        });
+
     }
+
+    $('#es-day-modal-body').html(html);
+}
 
     /* "+ Add Slot to This Day" inside day modal */
     $(document).on('click', '#es-day-add-slot', function () {
@@ -527,32 +583,108 @@
     }
 
     function renderDayList(d) {
-        if (!d.slots.length) {
-            $('#es-day-list').html('<p class="es-empty-text">No slots yet. Add one above.</p>');
-            return;
-        }
-        var html = '';
-        d.slots.forEach(function (s) {
-            var isFull = s.booked >= s.capacity;
-            var isPersonal = s.type === 'personal';
-            html += '<div class="es-slot-row" style="--type-color:' + s.type_color + '">';
-            html += '<div class="es-slot-time">' + escapeHtml(s.start) + '</div>';
-            html += '<div class="es-slot-info">';
-            html += '<div class="es-slot-info-top">' + s.duration + ' min · ' + escapeHtml(s.platform.toLowerCase()) + '</div>';
-            html += '<div class="es-slot-info-sub">' + (s.title ? escapeHtml(s.title) : (s.notes ? escapeHtml(s.notes) : 'No note')) + '</div>';
-            html += '</div>';
-            html += '<span class="es-slot-status' + (isFull ? ' es-slot-status-full' : '') + '">' + (isFull ? 'FULL' : 'OPEN') + '</span>';
-            html += '<div class="es-slot-actions">';
-            if (!isFull && !isPersonal) {
-                html += '<button type="button" class="es-slot-book es-book-for-user" data-slot=\'' + JSON.stringify(s).replace(/'/g, '&#39;') + '\' title="Book for a user"><span class="dashicons dashicons-businessperson"></span></button>';
-            }
-            html += '<button type="button" class="es-slot-edit es-edit-slot" data-slot=\'' + JSON.stringify(s).replace(/'/g, '&#39;') + '\' title="Edit"><span class="dashicons dashicons-edit"></span></button>';
-            html += '<button type="button" class="es-slot-del es-delete-slot" data-id="' + s.id + '" title="Delete">×</button>';
-            html += '</div>';
-            html += '</div>';
-        });
-        $('#es-day-list').html(html);
-    }
+
+	    if (!d.slots.length) {
+	        $('#es-day-list').html('<p class="es-empty-text">No slots yet. Add one above.</p>');
+	        return;
+	    }
+
+	    var html = '';
+
+	    d.slots.forEach(function (s) {
+
+	        var isFull = s.booked >= s.capacity;
+	        var isPersonal = s.type === 'personal';
+
+	        html += '<div class="es-slot-row" style="--type-color:' + s.type_color + '">';
+
+	        // Time
+	        html += '<div class="es-slot-time">';
+	        html += escapeHtml(s.start);
+	        html += '</div>';
+
+	        // Info
+	        html += '<div class="es-slot-info">';
+
+	        html += '<div class="es-slot-info-top">';
+	        html += s.duration + ' min · ' + escapeHtml(s.platform.toLowerCase());
+	        html += '</div>';
+
+	        html += '<div class="es-slot-info-sub">';
+
+	        // Title / Notes
+	        html += (
+	            s.title
+	                ? escapeHtml(s.title)
+	                : (
+	                    s.notes
+	                        ? escapeHtml(s.notes)
+	                        : 'No note'
+	                )
+	        );
+
+	        // Single User Name
+	        if (s.user_name) {
+
+	            html += '<div class="es-slot-user">';
+	            html += '<span class="dashicons dashicons-admin-users"></span> ';
+	            html += escapeHtml(s.user_name);
+	            html += '</div>';
+
+	        }
+
+	        // Multiple Users
+	        if (s.users && s.users.length) {
+
+	            html += '<div class="es-slot-user">';
+	            html += '<span class="dashicons dashicons-admin-users"></span> ';
+	            html += escapeHtml(s.users.join(', '));
+	            html += '</div>';
+
+	        }
+
+	        html += '</div>'; // es-slot-info-sub
+
+	        html += '</div>'; // es-slot-info
+
+	        // Status
+	        html += '<span class="es-slot-status' + (isFull ? ' es-slot-status-full' : '') + '">';
+	        html += (isFull ? 'FULL' : 'OPEN');
+	        html += '</span>';
+
+	        // Actions
+	        html += '<div class="es-slot-actions">';
+
+	        if (!isFull && !isPersonal) {
+
+	            html += '<button type="button" class="es-slot-book es-book-for-user" ';
+	            html += 'data-slot=\'' + JSON.stringify(s).replace(/'/g, "&apos;") + '\' ';
+	            html += 'title="Book for a user">';
+	            html += '<span class="dashicons dashicons-businessperson"></span>';
+	            html += '</button>';
+
+	        }
+
+	        // Edit Button
+	        html += '<button type="button" class="es-slot-edit es-edit-slot" ';
+	        html += 'data-slot=\'' + JSON.stringify(s).replace(/'/g, "&apos;") + '\' ';
+	        html += 'title="Edit">';
+	        html += '<span class="dashicons dashicons-edit"></span>';
+	        html += '</button>';
+
+	        // Delete Button
+	        html += '<button type="button" class="es-slot-del es-delete-slot" ';
+	        html += 'data-id="' + s.id + '" ';
+	        html += 'title="Delete">×</button>';
+
+	        html += '</div>'; // es-slot-actions
+
+	        html += '</div>'; // es-slot-row
+
+	    });
+
+	    $('#es-day-list').html(html);
+	}
 
     /* All Defined Slots (right panel) */
     function loadAllSlots() {

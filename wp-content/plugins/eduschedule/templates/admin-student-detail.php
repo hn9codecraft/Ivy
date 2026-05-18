@@ -59,11 +59,6 @@ $outcome_grp  = ( $latest_outcome && $latest_outcome->group_id )   ? ES_Packages
             <a href="<?php echo esc_url( $back_url ); ?>" class="es-btn es-btn-ghost">
                 <span class="dashicons dashicons-arrow-left-alt"></span> Back
             </a>
-            <button type="button" class="es-btn" id="es-after-call-btn"
-                    data-user-id="<?php echo (int) $student['id']; ?>">
-                <span class="dashicons dashicons-phone"></span>
-                <?php echo $is_converted ? 'Re-Open After Call' : 'After Call'; ?>
-            </button>
             <a href="mailto:<?php echo esc_attr( $student['email'] ); ?>" class="es-btn es-btn-ghost">
                 <span class="dashicons dashicons-email"></span> Email
             </a>
@@ -140,6 +135,88 @@ $outcome_grp  = ( $latest_outcome && $latest_outcome->group_id )   ? ES_Packages
         </div>
     <?php endif; ?>
 
+    <!-- ============ After Call — Always-Visible Inline Form ============ -->
+    <div class="es-card es-after-call-section" id="es-after-call-section"
+         data-user-id="<?php echo (int) $student['id']; ?>"
+         style="padding:20px 24px;margin-bottom:16px;border-left:4px solid #6366f1">
+        <div class="es-after-call-head" style="margin-bottom:16px">
+            <h3 style="margin:0;font-size:16px;display:flex;align-items:center;gap:8px;">
+                <span class="dashicons dashicons-phone" style="color:#6366f1"></span>
+                After Call — Convert Lead
+            </h3>
+            <p class="es-page-sub" style="margin:4px 0 0;font-size:12px;">
+                Lead: <strong><?php echo esc_html( $student['display_name'] ); ?></strong> · <?php echo esc_html( $student['email'] ); ?>
+            </p>
+        </div>
+
+        <div class="es-after-call-body">
+            <div class="es-modal-row">
+                <div class="es-field">
+                    <label class="es-label">Outcome</label>
+                    <select id="es-after-call-outcome">
+                        <option value="1:1 Student" <?php selected( $outcome_name, '1:1 Student' ); ?>>1:1 Student</option>
+                        <option value="Group Student" <?php selected( $outcome_name, 'Group Student' ); ?>>Group Student</option>
+                        <option value="Follow-up Needed" <?php selected( $outcome_name, 'Follow-up Needed' ); ?>>Follow-up Needed</option>
+                        <option value="Not Interested" <?php selected( $outcome_name, 'Not Interested' ); ?>>Not Interested</option>
+                    </select>
+                </div>
+
+                <div class="es-field" id="es-group-field" style="display:none">
+                    <label class="es-label">Assign to Group</label>
+                    <select id="es-after-call-group">
+                        <option value="">Select group...</option>
+                        <?php foreach ( $all_groups as $g ) : ?>
+                            <option value="<?php echo (int) $g->id; ?>"><?php echo esc_html( $g->group_name ); ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            </div>
+
+            <div class="es-field" id="es-package-field">
+                <label class="es-label">Package <small style="font-weight:400;opacity:0.6">(student will choose from these via link)</small></label>
+                <div id="es-package-checkboxes" style="display:flex;flex-direction:column;gap:8px;padding:10px;background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.08);border-radius:8px;max-height:220px;overflow-y:auto;">
+                    <?php if ( empty( $all_packages ) ) : ?>
+                        <div style="font-size:12px;color:rgba(255,255,255,0.6);">No packages available. <a href="<?php echo esc_url( admin_url( 'admin.php?page=eduschedule-packages' ) ); ?>">Create one</a>.</div>
+                    <?php else : foreach ( $all_packages as $pkg ) :
+                        $cur = ! empty( $pkg->currency ) ? $pkg->currency : 'INR';
+                    ?>
+                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
+                            <input type="checkbox" class="es-pkg-check" value="<?php echo (int) $pkg->id; ?>"
+                                   <?php checked( in_array( (int) $pkg->id, $staged_ids, true ) ); ?> />
+                            <span>
+                                <strong><?php echo esc_html( $pkg->package_name ); ?></strong>
+                                <?php if ( $pkg->price > 0 ) : ?>
+                                    <span style="opacity:0.7"> — <?php echo esc_html( ES_Helpers::format_price( $pkg->price, $cur ) ); ?></span>
+                                <?php endif; ?>
+                            </span>
+                        </label>
+                    <?php endforeach; endif; ?>
+                </div>
+                <small class="es-field-hint" style="margin-top:6px;display:block;">
+                    Tip: select up to 3 packages — the student will see only these on the package selection page.
+                </small>
+            </div>
+
+            <div class="es-field">
+                <label class="es-label">Additional Comments</label>
+                <textarea id="es-after-call-comments" rows="3" placeholder="Notes from the call, next steps..."><?php
+                    echo esc_textarea( $latest_outcome ? $latest_outcome->additional_comments : '' );
+                ?></textarea>
+            </div>
+
+            <div class="es-alert es-alert-info" style="margin-top:6px;padding:10px 12px;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.25);border-radius:6px;color:#fbbf24;font-size:12px;">
+                📧 On submit: confirmation email with package selection link will be sent to the student and your admin email.
+            </div>
+
+            <div style="margin-top:14px;display:flex;gap:10px;justify-content:flex-end;">
+                <button type="button" class="es-btn" id="es-after-call-submit">
+                    <span class="dashicons dashicons-yes" style="font-size:16px"></span>
+                    Submit &amp; Convert
+                </button>
+            </div>
+        </div>
+    </div>
+
     <div class="es-card" style="padding:20px 24px">
         <div class="es-sd-grid">
             <div class="es-sd-label">Name</div>
@@ -177,6 +254,90 @@ $outcome_grp  = ( $latest_outcome && $latest_outcome->group_id )   ? ES_Packages
                 <div class="es-sd-label">Timezone</div>
                 <div class="es-sd-value"><?php echo esc_html( $student['timezone'] ); ?></div>
             <?php endif; ?>
+
+            <?php 
+
+            	 $forms = GFAPI::get_forms();
+            	 $user_id = $student['id'];
+
+			$all_data = [];
+
+			if ( ! empty( $forms ) ) {
+
+			    foreach ( $forms as $form ) {
+
+			        $form_id = $form['id'];
+
+			        /**
+			         * Get user entries
+			         */
+			        $search_criteria = [
+			            'field_filters' => [
+			                [
+			                    'key'   => 'created_by',
+			                    'value' => $user_id
+			                ]
+			            ]
+			        ];
+
+			        $entries = GFAPI::get_entries(
+			            $form_id,
+			            $search_criteria
+			        );
+
+			        if ( is_wp_error( $entries ) || empty( $entries ) ) {
+			            continue;
+			        }
+
+			        foreach ( $entries as $entry ) {
+
+			            foreach ( $form['fields'] as $field ) {
+
+			                $field_id = (string) $field->id;
+
+			                $value = rgar( $entry, $field_id );
+
+			                /**
+			                 * Skip empty fields
+			                 */
+			                if ( empty( $value ) ) {
+			                    continue;
+			                }
+
+			                /**
+			                 * Get field label
+			                 */
+			                $field_label = $field->label;
+
+			                /**
+			                 * Store unique values only
+			                 */
+			                if ( ! isset( $all_data[ $field_label ] ) ) {
+
+			                    $all_data[ $field_label ] = $value;
+			                }
+			            }
+			        }
+			    }
+			}
+			
+	        if ( ! empty( $all_data ) ) : ?>
+	            <?php foreach ( $all_data as $label => $value ) : ?>
+	                <div class="es-sd-label">
+	                    <?php echo esc_html( $label ); ?>
+	                </div>
+	               <div class="es-sd-value">
+	                    <?php echo esc_html( $value ); ?>
+	                </div>
+	            <?php endforeach; ?>
+	        <?php else : ?>
+	            <div class="es-sd-value">
+	                No Gravity Forms submissions found.
+	            </div>
+	        <?php endif; ?>
+
+
+
 
             <div class="es-sd-label">Joined</div>
             <div class="es-sd-value"><?php echo esc_html( $student['registered_label'] ); ?></div>
@@ -224,78 +385,3 @@ $outcome_grp  = ( $latest_outcome && $latest_outcome->group_id )   ? ES_Packages
     </div>
 </div>
 
-<!-- ============ After Call Modal ============ -->
-<div class="es-modal" id="es-after-call-modal" style="display:none" data-user-id="<?php echo (int) $student['id']; ?>">
-    <div class="es-modal-backdrop"></div>
-    <div class="es-modal-card">
-        <div class="es-modal-head">
-            <h2>After Call — Convert Lead</h2>
-            <button type="button" class="es-modal-close" aria-label="Close">×</button>
-        </div>
-        <div class="es-modal-body">
-            <p class="es-field-hint" style="margin-bottom:16px">
-                Lead: <strong><?php echo esc_html( $student['display_name'] ); ?></strong> · <?php echo esc_html( $student['email'] ); ?>
-            </p>
-
-            <div class="es-field">
-                <label class="es-label">Outcome</label>
-                <select id="es-after-call-outcome">
-                    <option value="1:1 Student" <?php selected( $outcome_name, '1:1 Student' ); ?>>1:1 Student</option>
-                    <option value="Group Student" <?php selected( $outcome_name, 'Group Student' ); ?>>Group Student</option>
-                    <option value="Follow-up Needed" <?php selected( $outcome_name, 'Follow-up Needed' ); ?>>Follow-up Needed</option>
-                    <option value="Not Interested" <?php selected( $outcome_name, 'Not Interested' ); ?>>Not Interested</option>
-                </select>
-            </div>
-
-            <div class="es-field" id="es-group-field" style="display:none">
-                <label class="es-label">Assign to Group</label>
-                <select id="es-after-call-group">
-                    <option value="">Select group...</option>
-                    <?php foreach ( $all_groups as $g ) : ?>
-                        <option value="<?php echo (int) $g->id; ?>"><?php echo esc_html( $g->group_name ); ?></option>
-                    <?php endforeach; ?>
-                </select>
-            </div>
-
-            <div class="es-field" id="es-package-field">
-                <label class="es-label">Package <small style="font-weight:400;opacity:0.6">(student will choose from these via link)</small></label>
-                <div id="es-package-checkboxes" style="display:flex;flex-direction:column;gap:8px;padding:10px;background:rgba(0,0,0,0.2);border:1px solid rgba(255,255,255,0.08);border-radius:8px;max-height:200px;overflow-y:auto;">
-                    <?php if ( empty( $all_packages ) ) : ?>
-                        <div style="font-size:12px;color:rgba(255,255,255,0.6);">No packages available. <a href="<?php echo esc_url( admin_url( 'admin.php?page=eduschedule-packages' ) ); ?>">Create one</a>.</div>
-                    <?php else : foreach ( $all_packages as $pkg ) : ?>
-                        <label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:13px;">
-                            <input type="checkbox" class="es-pkg-check" value="<?php echo (int) $pkg->id; ?>"
-                                   <?php checked( in_array( (int) $pkg->id, $staged_ids, true ) ); ?> />
-                            <span>
-                                <strong><?php echo esc_html( $pkg->package_name ); ?></strong>
-                                <?php if ( $pkg->price > 0 ) : ?>
-                                    <span style="opacity:0.7"> — ₹<?php echo number_format( $pkg->price, 0 ); ?></span>
-                                <?php endif; ?>
-                            </span>
-                        </label>
-                    <?php endforeach; endif; ?>
-                </div>
-                <small class="es-field-hint" style="margin-top:6px;display:block;">
-                    Tip: select up to 3 packages — the student will see only these on the package selection page.
-                </small>
-            </div>
-
-            <div class="es-field">
-                <label class="es-label">Additional Comments</label>
-                <textarea id="es-after-call-comments" rows="3" placeholder="Notes from the call, next steps..."><?php
-                    echo esc_textarea( $latest_outcome ? $latest_outcome->additional_comments : '' );
-                ?></textarea>
-            </div>
-
-            <div class="es-alert es-alert-info" style="margin-top:12px;padding:10px 12px;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.25);border-radius:6px;color:#fbbf24;font-size:12px;">
-                📧 On submit: confirmation email with package selection link will be sent to the student and your admin email.
-            </div>
-        </div>
-        <div class="es-modal-foot">
-            <button type="button" class="es-btn es-btn-ghost es-modal-close">Cancel</button>
-            <button type="button" class="es-btn" id="es-after-call-submit">
-                Submit &amp; Convert
-            </button>
-        </div>
-    </div>
-</div>

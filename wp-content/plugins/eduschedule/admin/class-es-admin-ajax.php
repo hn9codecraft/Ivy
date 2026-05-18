@@ -34,6 +34,20 @@ class ES_Admin_Ajax {
         // Public package selection
         add_action( 'wp_ajax_es_student_select_package', array( $this, 'student_select_package' ) );
         add_action( 'wp_ajax_nopriv_es_student_select_package', array( $this, 'student_select_package' ) );
+
+        // Stripe Checkout (hosted page — kept as fallback)
+        add_action( 'wp_ajax_es_stripe_create_checkout',        array( $this, 'stripe_create_checkout' ) );
+        add_action( 'wp_ajax_nopriv_es_stripe_create_checkout', array( $this, 'stripe_create_checkout' ) );
+
+        // Stripe Checkout — public pricing page (no token required, any visitor)
+        add_action( 'wp_ajax_es_stripe_public_checkout',        array( $this, 'stripe_public_checkout' ) );
+        add_action( 'wp_ajax_nopriv_es_stripe_public_checkout', array( $this, 'stripe_public_checkout' ) );
+
+        // Stripe Elements (inline payment form)
+        add_action( 'wp_ajax_es_stripe_create_intent',        array( $this, 'stripe_create_intent' ) );
+        add_action( 'wp_ajax_nopriv_es_stripe_create_intent', array( $this, 'stripe_create_intent' ) );
+        add_action( 'wp_ajax_es_stripe_finalize_intent',        array( $this, 'stripe_finalize_intent' ) );
+        add_action( 'wp_ajax_nopriv_es_stripe_finalize_intent', array( $this, 'stripe_finalize_intent' ) );
     }
 
     private function check() {
@@ -52,7 +66,11 @@ class ES_Admin_Ajax {
         $from = sprintf( '%04d-%02d-01', $year, $month );
         $to   = sprintf( '%04d-%02d-%02d', $year, $month, $days_in );
 
-        $slots = ES_DB::get_slots_in_range( $from, $to );
+        $slots = ES_DB::get_slots_in_range_calendar( $from, $to );
+
+        //echo "<pre>"; print_r($slots); exit();
+
+
         $by_date = array();
         foreach ( $slots as $s ) {
             $iso = $s->slot_date;
@@ -84,9 +102,14 @@ class ES_Admin_Ajax {
 
     /** Get all slots for a single day with full detail */
     public function day_slots() {
-        $this->check();
-        $date = isset( $_POST['date'] ) ? sanitize_text_field( wp_unslash( $_POST['date'] ) ) : '';
-        if ( ! ES_Helpers::valid_date( $date ) ) wp_send_json_error( array( 'message' => 'Invalid date' ) );
+
+        //$this->check();
+        $date = isset( $_POST['date'] )? sanitize_text_field( wp_unslash( $_POST['date'] ) ) : '';
+        if ( ! ES_Helpers::valid_date( $date ) ) {
+            wp_send_json_error( array(
+                'message' => 'Invalid date'
+            ) );
+        }
         $slots = ES_DB::get_slots_for_date( $date );
         $out = array();
         foreach ( $slots as $s ) {
@@ -104,9 +127,14 @@ class ES_Admin_Ajax {
                 'platform'   => $s->platform,
                 'title'      => $s->title,
                 'notes'      => $s->notes,
+                'user_name'  => isset( $s->user_name ) ? $s->user_name : '',
+                'user_email' => isset( $s->user_email ) ? $s->user_email : '',
             );
         }
-        wp_send_json_success( array( 'date' => $date, 'slots' => $out ) );
+        wp_send_json_success( array(
+            'date'  => $date,
+            'slots' => $out
+        ) );
     }
 
     /** Get all defined slots (for "My Slots" right-side list) */
@@ -629,15 +657,29 @@ class ES_Admin_Ajax {
         $this->check();
         
         $id = isset( $_POST['id'] ) ? (int) $_POST['id'] : 0;
+
+        $allowed_currencies = array_keys( ES_Helpers::currencies() );
+        $currency = isset( $_POST['currency'] ) ? strtoupper( sanitize_text_field( wp_unslash( $_POST['currency'] ) ) ) : 'INR';
+        if ( ! in_array( $currency, $allowed_currencies, true ) ) $currency = 'INR';
+
+        // is_active defaults to 1; we only honour an explicit "0" from the edit form.
+        $is_active = 1;
+        if ( isset( $_POST['is_active'] ) && (int) $_POST['is_active'] === 0 ) $is_active = 0;
+
         $data = array(
             'package_name'  => isset( $_POST['package_name'] ) ? sanitize_text_field( wp_unslash( $_POST['package_name'] ) ) : '',
             'sub_heading'   => isset( $_POST['sub_heading'] ) ? sanitize_text_field( wp_unslash( $_POST['sub_heading'] ) ) : '',
             'price'         => isset( $_POST['price'] ) ? floatval( $_POST['price'] ) : 0,
+            'currency'      => $currency,
+            // billing_cycle + yearly_price columns still exist for backward-compat;
+            // we just no longer expose them in the admin UI.
+            'billing_cycle' => 'monthly',
+            'yearly_price'  => 0,
             'hours'         => isset( $_POST['hours'] ) ? (int) $_POST['hours'] : 0,
             'tagline'       => isset( $_POST['tagline'] ) ? sanitize_text_field( wp_unslash( $_POST['tagline'] ) ) : '',
             'description'   => isset( $_POST['description'] ) ? sanitize_textarea_field( wp_unslash( $_POST['description'] ) ) : '',
             'display_order' => isset( $_POST['display_order'] ) ? (int) $_POST['display_order'] : 0,
-            'is_active'     => isset( $_POST['is_active'] ) ? 1 : 0,
+            'is_active'     => $is_active,
         );
 
         if ( empty( $data['package_name'] ) ) {
@@ -779,8 +821,9 @@ class ES_Admin_Ajax {
             if ( $needs_package ) {
                 $message .= "Based on our conversation, we've prepared the following package(s) for you:\n\n";
                 foreach ( $packages_list as $p ) {
+                    $pcur = ! empty( $p->currency ) ? $p->currency : 'INR';
                     $message .= "• " . $p->package_name;
-                    if ( $p->price > 0 ) $message .= " — ₹" . number_format( $p->price, 0 );
+                    if ( $p->price > 0 ) $message .= " — " . ES_Helpers::format_price( $p->price, $pcur );
                     $message .= "\n";
                 }
                 $message .= "\nPlease click the link below to select your preferred package:\n";
@@ -808,7 +851,8 @@ class ES_Admin_Ajax {
             if ( ! empty( $packages_list ) ) {
                 $admin_body .= "Packages staged:\n";
                 foreach ( $packages_list as $p ) {
-                    $admin_body .= "  - {$p->package_name} (₹" . number_format( $p->price, 0 ) . ")\n";
+                    $pcur = ! empty( $p->currency ) ? $p->currency : 'INR';
+                    $admin_body .= "  - {$p->package_name} (" . ES_Helpers::format_price( $p->price, $pcur ) . ")\n";
                 }
             }
             if ( $group_id ) {
@@ -896,11 +940,14 @@ class ES_Admin_Ajax {
         // Send notification emails
         $user = get_userdata( $user_id );
         if ( $user ) {
+            $pkg_currency = ! empty( $package->currency ) ? $package->currency : 'INR';
+            $price_label  = ES_Helpers::format_price( $package->price, $pkg_currency );
+
             $subject  = 'Package Selection Confirmed';
             $message  = "Hello " . $user->display_name . ",\n\n";
             $message .= "Thank you for selecting your package:\n\n";
             $message .= "Package: " . $package->package_name . "\n";
-            $message .= "Price: ₹" . number_format( $package->price, 0 ) . "\n";
+            $message .= "Price: " . $price_label . "\n";
             if ( $package->hours ) {
                 $message .= "Duration: " . $package->hours . " hours\n";
             }
@@ -914,7 +961,7 @@ class ES_Admin_Ajax {
             $admin_message = "A student has selected their package:\n\n";
             $admin_message .= "Student: " . $user->display_name . " (" . $user->user_email . ")\n";
             $admin_message .= "Package: " . $package->package_name . "\n";
-            $admin_message .= "Price: ₹" . number_format( $package->price, 0 ) . "\n";
+            $admin_message .= "Price: " . $price_label . "\n";
 
             wp_mail( $admin_email, $admin_subject, $admin_message );
         }
@@ -924,6 +971,174 @@ class ES_Admin_Ajax {
             'package_name' => $package->package_name,
             'redirect'     => $redirect_url,
         ) );
+    }
+
+    /* =================== STRIPE CHECKOUT =================== */
+
+    /**
+     * Create a Stripe Checkout Session and return its hosted URL.
+     * Frontend POSTs: package_id, user_id, token, billing_cycle, nonce.
+     */
+    public function stripe_create_checkout() {
+        check_ajax_referer( 'es_fe_nonce', 'nonce' );
+
+        $user_id       = isset( $_POST['user_id'] ) ? (int) $_POST['user_id'] : 0;
+        $token         = isset( $_POST['token'] ) ? sanitize_text_field( wp_unslash( $_POST['token'] ) ) : '';
+        $package_id    = isset( $_POST['package_id'] ) ? (int) $_POST['package_id'] : 0;
+        $billing_cycle = isset( $_POST['billing_cycle'] ) ? sanitize_text_field( wp_unslash( $_POST['billing_cycle'] ) ) : 'monthly';
+
+        if ( ! $user_id || ! $token || ! $package_id ) {
+            wp_send_json_error( array( 'message' => 'Invalid request.' ) );
+        }
+        if ( ! in_array( $billing_cycle, array( 'monthly', 'yearly' ), true ) ) {
+            $billing_cycle = 'monthly';
+        }
+
+        if ( ! class_exists( 'ES_Stripe' ) || ! ES_Stripe::is_enabled() ) {
+            wp_send_json_error( array( 'message' => 'Stripe is not available. Please contact the admin.' ) );
+        }
+
+        if ( ! ES_Packages::validate_token( $user_id, $token ) ) {
+            wp_send_json_error( array( 'message' => 'Invalid or expired link.' ) );
+        }
+
+        // If the admin staged a subset, enforce the package belongs to it.
+        $staged = ES_Packages::get_staged_packages( $user_id );
+        if ( ! empty( $staged ) && ! in_array( $package_id, $staged, true ) ) {
+            wp_send_json_error( array( 'message' => 'This package is not available for selection.' ) );
+        }
+
+        $result = ES_Stripe::create_checkout_session( $user_id, $package_id, $billing_cycle );
+        if ( is_wp_error( $result ) ) {
+            wp_send_json_error( array( 'message' => $result->get_error_message() ) );
+        }
+
+        wp_send_json_success( array(
+            'url'        => $result['url'],
+            'session_id' => $result['session_id'],
+        ) );
+    }
+
+    /**
+     * PUBLIC pricing-page checkout — no user_id/token required.
+     * Frontend POSTs: package_id, billing_cycle, email, name, nonce.
+     */
+    public function stripe_public_checkout() {
+        check_ajax_referer( 'es_fe_nonce', 'nonce' );
+
+        $package_id    = isset( $_POST['package_id'] ) ? (int) $_POST['package_id'] : 0;
+        $billing_cycle = isset( $_POST['billing_cycle'] ) ? sanitize_text_field( wp_unslash( $_POST['billing_cycle'] ) ) : 'monthly';
+        $email         = isset( $_POST['email'] ) ? sanitize_email( wp_unslash( $_POST['email'] ) ) : '';
+        $name          = isset( $_POST['name'] )  ? sanitize_text_field( wp_unslash( $_POST['name'] ) )  : '';
+
+        if ( ! $package_id ) {
+            wp_send_json_error( array( 'message' => 'Please select a package.' ) );
+        }
+        if ( ! $email || ! is_email( $email ) ) {
+            wp_send_json_error( array( 'message' => 'Please enter a valid email address.' ) );
+        }
+        if ( ! in_array( $billing_cycle, array( 'monthly', 'yearly' ), true ) ) {
+            $billing_cycle = 'monthly';
+        }
+
+        if ( ! class_exists( 'ES_Stripe' ) || ! ES_Stripe::is_enabled() ) {
+            wp_send_json_error( array( 'message' => 'Online checkout is currently unavailable. Please contact us directly.' ) );
+        }
+
+        // If the visitor is already logged in, prefer the tokenless path that
+        // uses their account directly.
+        if ( is_user_logged_in() ) {
+            $u = wp_get_current_user();
+            $email = $email ?: $u->user_email;
+            $name  = $name  ?: $u->display_name;
+        }
+
+        $result = ES_Stripe::create_checkout_session_guest( $package_id, $billing_cycle, $email, $name );
+        if ( is_wp_error( $result ) ) {
+            wp_send_json_error( array( 'message' => $result->get_error_message() ) );
+        }
+
+        wp_send_json_success( array(
+            'url'        => $result['url'],
+            'session_id' => $result['session_id'],
+        ) );
+    }
+    /**
+     * Create a Stripe PaymentIntent for the inline Elements form.
+     * POSTs: package_id, user_id, token, billing_cycle, name, email.
+     * Returns: client_secret, amount label, etc.
+     */
+    public function stripe_create_intent() {
+        check_ajax_referer( 'es_fe_nonce', 'nonce' );
+
+        $user_id       = isset( $_POST['user_id'] ) ? (int) $_POST['user_id'] : 0;
+        $token         = isset( $_POST['token'] ) ? sanitize_text_field( wp_unslash( $_POST['token'] ) ) : '';
+        $package_id    = isset( $_POST['package_id'] ) ? (int) $_POST['package_id'] : 0;
+        $billing_cycle = isset( $_POST['billing_cycle'] ) ? sanitize_text_field( wp_unslash( $_POST['billing_cycle'] ) ) : 'monthly';
+        $name          = isset( $_POST['name'] ) ? sanitize_text_field( wp_unslash( $_POST['name'] ) ) : '';
+        $email         = isset( $_POST['email'] ) ? sanitize_email( wp_unslash( $_POST['email'] ) ) : '';
+
+        if ( ! $user_id || ! $token || ! $package_id ) {
+            wp_send_json_error( array( 'message' => 'Invalid request.' ) );
+        }
+        if ( ! in_array( $billing_cycle, array( 'monthly', 'yearly' ), true ) ) {
+            $billing_cycle = 'monthly';
+        }
+        if ( $email && ! is_email( $email ) ) {
+            wp_send_json_error( array( 'message' => 'Please enter a valid email address.' ) );
+        }
+
+        if ( ! class_exists( 'ES_Stripe' ) || ! ES_Stripe::is_enabled() ) {
+            wp_send_json_error( array( 'message' => 'Stripe is not available. Please contact the admin.' ) );
+        }
+
+        if ( ! ES_Packages::validate_token( $user_id, $token ) ) {
+            wp_send_json_error( array( 'message' => 'Invalid or expired link.' ) );
+        }
+
+        $staged = ES_Packages::get_staged_packages( $user_id );
+        if ( ! empty( $staged ) && ! in_array( $package_id, $staged, true ) ) {
+            wp_send_json_error( array( 'message' => 'This package is not available for selection.' ) );
+        }
+
+        $result = ES_Stripe::create_payment_intent( $user_id, $package_id, $billing_cycle, $name, $email );
+        if ( is_wp_error( $result ) ) {
+            wp_send_json_error( array( 'message' => $result->get_error_message() ) );
+        }
+
+        wp_send_json_success( array(
+            'client_secret'     => $result['client_secret'],
+            'payment_intent_id' => $result['payment_intent_id'],
+            'amount'            => $result['amount'],
+            'currency'          => $result['currency'],
+            'amount_label'      => $result['amount_label'],
+            'billing_cycle'     => $result['billing_cycle'],
+            'publishable_key'   => ES_Stripe::publishable_key(),
+        ) );
+    }
+
+    /**
+     * Finalize a Stripe PaymentIntent after JS has confirmed it client-side.
+     * Server re-verifies status with Stripe, then marks paid + fires emails.
+     */
+    public function stripe_finalize_intent() {
+        check_ajax_referer( 'es_fe_nonce', 'nonce' );
+
+        $pi_id = isset( $_POST['payment_intent_id'] ) ? sanitize_text_field( wp_unslash( $_POST['payment_intent_id'] ) ) : '';
+        if ( ! $pi_id ) {
+            wp_send_json_error( array( 'message' => 'Missing payment intent id.' ) );
+        }
+
+        if ( ! class_exists( 'ES_Stripe' ) || ! ES_Stripe::is_enabled() ) {
+            wp_send_json_error( array( 'message' => 'Stripe is not available.' ) );
+        }
+
+        $result = ES_Stripe::finalize_payment_intent( $pi_id );
+        if ( is_wp_error( $result ) ) {
+            wp_send_json_error( array( 'message' => $result->get_error_message() ) );
+        }
+
+        wp_send_json_success( $result );
     }
 
     /* =================== GROUPS =================== */
