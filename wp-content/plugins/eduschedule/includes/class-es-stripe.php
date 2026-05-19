@@ -385,7 +385,7 @@ class ES_Stripe {
             return array(
                 'amount_label' => ES_Helpers::format_price( $row->amount, $row->currency ),
                 'package_name' => $pkg_existing ? $pkg_existing->package_name : '',
-                'valid_until'  => $row->valid_until,
+                'valid_until'  => $row->valid_until ? date_i18n( 'F j, Y', strtotime( $row->valid_until ) ) : '',
                 'already'      => true,
             );
         }
@@ -437,7 +437,7 @@ class ES_Stripe {
         return array(
             'amount_label' => ES_Helpers::format_price( $row->amount, $row->currency ),
             'package_name' => $pkg_now ? $pkg_now->package_name : '',
-            'valid_until'  => $valid_until,
+            'valid_until'  => $valid_until ? date_i18n( 'F j, Y', strtotime( $valid_until ) ) : '',
             'already'      => false,
         );
     }

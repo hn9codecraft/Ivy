@@ -35,9 +35,20 @@ $settings = ES_Helpers::settings();
 
 // Resolve shortcode atts
 $atts_default_cycle = isset( $sc_atts['default_cycle'] ) ? strtolower( $sc_atts['default_cycle'] ) : 'monthly';
-$atts_yearly_toggle = isset( $sc_atts['yearly_toggle'] ) ? strtolower( $sc_atts['yearly_toggle'] ) : ( ! empty( $settings['enable_yearly'] ) ? 'yes' : 'no' );
+$atts_yearly_toggle = isset( $sc_atts['yearly_toggle'] ) ? strtolower( $sc_atts['yearly_toggle'] ) : '';
+// Decide whether to show the Monthly/Yearly switcher. Rule:
+//   • If the shortcode explicitly sets yearly_toggle="yes" or "no", honour it.
+//   • Otherwise show it automatically when a yearly discount is configured,
+//     or when the admin has ticked "Enable Yearly Billing" in settings.
+if ( $atts_yearly_toggle === 'yes' ) {
+    $show_toggle = true;
+} elseif ( $atts_yearly_toggle === 'no' ) {
+    $show_toggle = false;
+} else {
+    $auto_yearly_discount = (float) ( $settings['yearly_discount'] ?? 0 );
+    $show_toggle = ( ! empty( $settings['enable_yearly'] ) ) || ( $auto_yearly_discount > 0 );
+}
 if ( ! in_array( $atts_default_cycle, array( 'monthly', 'yearly' ), true ) ) $atts_default_cycle = 'monthly';
-$show_toggle = ( $atts_yearly_toggle === 'yes' );
 
 $monthly_label_txt = ! empty( $sc_atts['monthly_label'] )  ? $sc_atts['monthly_label']  : 'Pay Monthly';
 $semester_label_t  = ! empty( $sc_atts['semester_label'] ) ? $sc_atts['semester_label'] : 'Pay per Semester';
@@ -51,6 +62,10 @@ $recommendation_text = isset( $sc_atts['recommendation_text'] ) ? $sc_atts['reco
 $valid_link   = false;
 $student_data = null;
 $packages     = array();
+$show_login   = false;       // when true, render a login prompt instead of cards
+$login_reason = '';          // user-facing explanation
+$current_user_id = get_current_user_id();
+$is_personalised_link = false;  // true only for admin-issued ?user_id&token links with staged packages
 
 /* ───────────────────────────────────────────────────────────────
  *  STRIPE HOSTED-CHECKOUT THANK-YOU (still supported as fallback)
@@ -141,37 +156,160 @@ if ( $is_selected && $selected_pkg ) {
 
 /* ───────────────────────────────────────────────────────────────
  *  PACKAGE SELECTION MODE
+ *
+ *  Access rules (all enforced server-side):
+ *    1. Visitor must be logged in. If not → render login prompt.
+ *    2. If a personalised link is present (?user_id=X&token=Y):
+ *         a. user_id MUST match the currently logged-in user.
+ *         b. token MUST be valid for that user.
+ *       → On success: $valid_link = true, $packages = staged-or-all.
+ *       → On failure: render an error explaining the mismatch.
+ *    3. If no token in URL but user is logged in:
+ *         → treat as "self-serve": $valid_link = true with the logged-in
+ *           user as $student_data, $packages = all active packages.
+ *           (Any logged-in user can buy any active package.)
  * ─────────────────────────────────────────────────────────────── */
-if ( $user_id && $token && ES_Packages::validate_token( $user_id, $token ) ) {
-    $valid_link = true;
-    $user = get_userdata( $user_id );
-    if ( $user ) {
-        $student_data = array(
-            'id'    => $user->ID,
-            'name'  => $user->display_name,
-            'email' => $user->user_email,
-        );
-        $staged_ids = ES_Packages::get_staged_packages( $user_id );
-        if ( ! empty( $staged_ids ) ) {
-            foreach ( $staged_ids as $sid ) {
-                $p = ES_Packages::get( $sid );
-                if ( $p && $p->is_active ) $packages[] = $p;
+if ( ! is_user_logged_in() ) {
+    $show_login   = true;
+    $login_reason = 'Please log in to view and purchase packages.';
+} elseif ( $user_id && $token ) {
+    // Personalised link path
+    if ( $user_id !== $current_user_id ) {
+        $show_login   = true;
+        $login_reason = 'This personalised link belongs to a different account. Please log in with that account.';
+    } elseif ( ! ES_Packages::validate_token( $user_id, $token ) ) {
+        $show_login   = true;
+        $login_reason = 'This link has expired or is invalid. Please contact us for a new one.';
+    } else {
+        $valid_link = true;
+        $user = get_userdata( $user_id );
+        if ( $user ) {
+            $student_data = array(
+                'id'    => $user->ID,
+                'name'  => $user->display_name,
+                'email' => $user->user_email,
+            );
+            $staged_ids = ES_Packages::get_staged_packages( $user_id );
+            if ( ! empty( $staged_ids ) ) {
+                $is_personalised_link = true;
+                foreach ( $staged_ids as $sid ) {
+                    $p = ES_Packages::get( $sid );
+                    if ( $p && $p->is_active ) $packages[] = $p;
+                }
+            } else {
+                $packages = ES_Packages::get_all( true );
             }
-        } else {
-            $packages = ES_Packages::get_all( true );
         }
     }
 } else {
+    // Logged-in self-serve — no token in URL, use current user
+    $current_user = wp_get_current_user();
+    $valid_link   = true;
+    $student_data = array(
+        'id'    => $current_user->ID,
+        'name'  => $current_user->display_name,
+        'email' => $current_user->user_email,
+    );
+    // Mint a token for this session so the inline payment AJAX (which requires
+    // user_id + token) authenticates. Reuse the user's existing valid token
+    // if one is present (e.g. from a recent after-call), otherwise create one.
+    $existing_token = get_user_meta( $current_user->ID, ES_Packages::META_TOKEN, true );
+    $existing_exp   = (int) get_user_meta( $current_user->ID, ES_Packages::META_TOKEN_EXP, true );
+    if ( $existing_token && $existing_exp > time() ) {
+        $token = $existing_token;
+    } else {
+        $token = ES_Packages::generate_selection_token( $current_user->ID, 1 ); // 1-day TTL
+    }
+    $user_id = $current_user->ID;
     $packages = ES_Packages::get_all( true );
 }
 
 $stripe_ready    = class_exists( 'ES_Stripe' ) && ES_Stripe::is_enabled();
 $yearly_discount = (float) ( $settings['yearly_discount'] ?? 0 );
 
+// Admin-only diagnostic — only visible to people who can manage the plugin,
+// so end users never see it. Helps the operator understand why "Buy Now"
+// isn't showing.
+$stripe_admin_hint = '';
+if ( ! $stripe_ready && current_user_can( 'manage_options' ) ) {
+    $reasons = array();
+    if ( ! class_exists( 'ES_Stripe' ) ) {
+        $reasons[] = 'Stripe integration class missing — please reinstall the plugin.';
+    } else {
+        if ( empty( $settings['stripe_enabled'] ) ) {
+            $reasons[] = 'The "Enable Stripe Checkout" checkbox is OFF.';
+        }
+        $mode_label = ! empty( $settings['stripe_mode'] ) ? $settings['stripe_mode'] : 'test';
+        $secret_key_name = $mode_label === 'live' ? 'stripe_live_secret' : 'stripe_test_secret';
+        if ( empty( $settings[ $secret_key_name ] ) ) {
+            $reasons[] = 'No <strong>' . esc_html( ucfirst( $mode_label ) ) . ' Secret Key</strong> is set for the current mode.';
+        }
+    }
+    if ( $reasons ) {
+        $stripe_admin_hint = 'Stripe is not active. ' . implode( ' ', $reasons )
+            . ' <a href="' . esc_url( admin_url( 'admin.php?page=eduschedule-settings' ) ) . '">Open Settings →</a>';
+    }
+}
+
 $discount_label  = $yearly_discount > 0
     ? ' (' . rtrim( rtrim( number_format( $yearly_discount, 1 ), '0' ), '.' ) . '% Discount)'
     : '';
+
+$yearly_discount_int = (int) round( $yearly_discount );
 ?>
+
+<?php if ( $show_login ) :
+    // The visitor needs to log in (or log in as the right user) — render a
+    // prompt and stop rendering the rest of the page. We preserve the current
+    // URL (with user_id/token if present) as the post-login redirect_to so
+    // they end up back here after authenticating.
+    $current_url = ( is_ssl() ? 'https' : 'http' ) . '://'
+        . ( isset( $_SERVER['HTTP_HOST'] ) ? $_SERVER['HTTP_HOST'] : '' )
+        . ( isset( $_SERVER['REQUEST_URI'] ) ? $_SERVER['REQUEST_URI'] : '' );
+    $login_url = wp_login_url( $current_url );
+    $registration_open = (bool) get_option( 'users_can_register' );
+    ?>
+    <div class="es-pp-shell es-pp-login-shell">
+        <div class="es-pp-login-card">
+            <div class="es-pp-brand" style="justify-content:center;border:0;margin-bottom:18px">
+                <?php if ( $brand_logo ) : ?>
+                    <img src="<?php echo esc_url( $brand_logo ); ?>" alt="" class="es-pp-brand-logo" />
+                <?php else : ?>
+                    <span class="es-pp-brand-mark">◆</span>
+                <?php endif; ?>
+                <span class="es-pp-brand-name"><?php echo esc_html( $brand_name ); ?></span>
+            </div>
+            <div class="es-pp-login-icon">
+                <span class="dashicons dashicons-lock"></span>
+            </div>
+            <h1 class="es-pp-login-title">Login Required</h1>
+            <p class="es-pp-login-sub"><?php echo esc_html( $login_reason ); ?></p>
+            <a href="<?php echo esc_url( $login_url ); ?>" class="es-pp-login-btn">
+                Log in to continue
+            </a>
+            <?php if ( $registration_open ) : ?>
+                <p class="es-pp-login-meta">
+                    Don't have an account?
+                    <a href="<?php echo esc_url( wp_registration_url() ); ?>">Sign up</a>
+                </p>
+            <?php endif; ?>
+        </div>
+    </div>
+    <style>
+    .es-pp-login-shell{max-width:480px;margin:60px auto;padding:0 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
+    .es-pp-login-card{background:#fff;border-radius:16px;padding:36px 32px;text-align:center;box-shadow:0 10px 40px rgba(15,23,42,.08);border:1px solid #e5e7eb}
+    .es-pp-login-icon{width:60px;height:60px;border-radius:50%;background:#1e293b;color:#caa657;display:inline-flex;align-items:center;justify-content:center;margin-bottom:18px}
+    .es-pp-login-icon .dashicons{font-size:28px;width:28px;height:28px}
+    .es-pp-login-title{margin:0 0 10px;font-size:22px;font-weight:600;color:#1e293b}
+    .es-pp-login-sub{margin:0 0 22px;font-size:14px;color:#64748b;line-height:1.5}
+    .es-pp-login-btn{display:inline-block;background:#caa657;color:#1e293b;padding:12px 26px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;transition:background .15s}
+    .es-pp-login-btn:hover{background:#b58e3e;color:#1e293b}
+    .es-pp-login-meta{margin:18px 0 0;font-size:13px;color:#94a3b8}
+    .es-pp-login-meta a{color:#caa657;text-decoration:none;font-weight:500}
+    .es-pp-login-meta a:hover{text-decoration:underline}
+    </style>
+    <?php return; // stop rendering the rest of the template
+endif; ?>
 
 <div class="es-pp-shell" data-default-cycle="<?php echo esc_attr( $atts_default_cycle ); ?>">
 
@@ -186,7 +324,7 @@ $discount_label  = $yearly_discount > 0
                 <span class="es-pp-brand-mark">◆</span>
             <?php endif; ?>
             <span class="es-pp-brand-name"><?php echo esc_html( $brand_name ); ?></span>
-            <?php if ( $valid_link && $student_data ) : ?>
+            <?php if ( $is_personalised_link && $student_data ) : ?>
                 <span class="es-pp-brand-sep">|</span>
                 <span class="es-pp-brand-sub">Decision Hub</span>
             <?php endif; ?>
@@ -198,8 +336,17 @@ $discount_label  = $yearly_discount > 0
             </div>
         <?php endif; ?>
 
-        <!-- Personalised heading -->
-        <?php if ( $valid_link && $student_data ) : ?>
+        <?php if ( $stripe_admin_hint ) : ?>
+            <div class="es-pkg-notice es-pkg-notice-warn" style="display:flex;gap:10px;align-items:flex-start">
+                <span class="dashicons dashicons-warning" style="margin-top:2px"></span>
+                <span><strong>Admin notice (only you can see this):</strong> <?php echo wp_kses_post( $stripe_admin_hint ); ?></span>
+            </div>
+        <?php endif; ?>
+
+        <!-- Heading: personal greeting only for admin-issued personalised links.
+             Self-serve logged-in users see the generic "Our Packages" heading
+             so the page doesn't awkwardly show their own name as the title. -->
+        <?php if ( $is_personalised_link && $student_data ) : ?>
             <div class="es-pp-greeting">
                 <h1><?php echo esc_html( $student_data['name'] ); ?></h1>
                 <p>Personalized Plan Selection</p>
@@ -211,8 +358,8 @@ $discount_label  = $yearly_discount > 0
             </div>
         <?php endif; ?>
 
-        <!-- Recommendation callout -->
-        <?php if ( $valid_link && $recommendation_text ) : ?>
+        <!-- Recommendation callout — admin-issued personalised links only -->
+        <?php if ( $is_personalised_link && $recommendation_text ) : ?>
             <div class="es-pp-reco">
                 <div class="es-pp-reco-head">
                     <span class="es-pp-reco-spark">✨</span> My Recommendation
@@ -226,6 +373,18 @@ $discount_label  = $yearly_discount > 0
                 <p>No packages available at the moment. Please check back later.</p>
             </div>
         <?php else : ?>
+            <?php if ( $show_toggle ) : ?>
+                <div class="es-pp-toggle-wrap es-pp-toggle-wrap-top">
+                    <span class="es-pp-toggle-label <?php echo $atts_default_cycle === 'monthly' ? 'is-active' : ''; ?>" data-side="monthly"><?php echo esc_html( $monthly_label_txt ); ?></span>
+                    <button type="button" class="es-pp-switch <?php echo $atts_default_cycle === 'yearly' ? 'is-yearly' : ''; ?>" id="es-pp-cycle-switch" aria-label="Toggle billing cycle">
+                        <span class="es-pp-switch-thumb"></span>
+                    </button>
+                    <span class="es-pp-toggle-label <?php echo $atts_default_cycle === 'yearly' ? 'is-active' : ''; ?>" data-side="yearly">
+                        <?php echo esc_html( $semester_label_t . $discount_label ); ?>
+                    </span>
+                </div>
+            <?php endif; ?>
+
             <div class="es-pp-grid">
                 <?php $i = 0; foreach ( $packages as $pkg ) : $i++;
                     $cur            = ! empty( $pkg->currency ) ? $pkg->currency : ( $settings['default_currency'] ?? 'INR' );
@@ -237,7 +396,7 @@ $discount_label  = $yearly_discount > 0
                     $monthly_money_label = ES_Helpers::format_price( $monthly_price, $cur );
                     $yearly_money_label  = ES_Helpers::format_price( $yearly_price,  $cur );
 
-                    $is_recommended = ( $valid_link && $recommended_idx > 0 && $i === $recommended_idx );
+                    $is_recommended = ( $is_personalised_link && $recommended_idx > 0 && $i === $recommended_idx );
                 ?>
                     <div class="es-pp-card <?php echo $is_recommended ? 'is-featured' : ''; ?>"
                          data-package-id="<?php echo (int) $pkg->id; ?>"
@@ -289,23 +448,20 @@ $discount_label  = $yearly_discount > 0
                                 <?php echo esc_html( $monthly_money_label ); ?><span class="es-pp-period"> / <?php echo esc_html( $period_unit ); ?></span>
                             </span>
                             <span class="es-pp-amount-yearly" <?php echo $atts_default_cycle === 'monthly' ? 'style="display:none"' : ''; ?>>
-                                <?php echo esc_html( $yearly_money_label ); ?><span class="es-pp-period"> / <?php echo esc_html( ! empty( $sc_atts['period_unit_yearly'] ) ? $sc_atts['period_unit_yearly'] : 'semester' ); ?></span>
+                                <?php echo esc_html( $yearly_money_label ); ?><span class="es-pp-period"> / <?php echo esc_html( ! empty( $sc_atts['period_unit_yearly'] ) ? $sc_atts['period_unit_yearly'] : 'year' ); ?></span>
+                                <?php if ( $yearly_discount_int > 0 ) : ?>
+                                    <span class="es-pp-save-badge">Save <?php echo (int) $yearly_discount_int; ?>%</span>
+                                <?php endif; ?>
                             </span>
                         </div>
 
-                        <?php if ( $valid_link && $student_data ) : ?>
+                        <?php if ( $stripe_ready ) : ?>
                             <button type="button" class="es-pp-select-btn"
                                     data-package-id="<?php echo (int) $pkg->id; ?>"
                                     data-user-id="<?php echo (int) $student_data['id']; ?>"
                                     data-token="<?php echo esc_attr( $token ); ?>"
                                     data-name="<?php echo esc_attr( $student_data['name'] ); ?>"
                                     data-email="<?php echo esc_attr( $student_data['email'] ); ?>">
-                                Select This Plan
-                            </button>
-                        <?php elseif ( $stripe_ready ) : ?>
-                            <button type="button" class="es-pp-buy-btn"
-                                    data-package-id="<?php echo (int) $pkg->id; ?>"
-                                    data-package-name="<?php echo esc_attr( $pkg->package_name ); ?>">
                                 Select This Plan
                             </button>
                         <?php else : ?>
@@ -315,55 +471,8 @@ $discount_label  = $yearly_discount > 0
                 <?php endforeach; ?>
             </div>
 
-            <?php if ( $show_toggle ) : ?>
-                <div class="es-pp-toggle-wrap">
-                    <span class="es-pp-toggle-label <?php echo $atts_default_cycle === 'monthly' ? 'is-active' : ''; ?>" data-side="monthly"><?php echo esc_html( $monthly_label_txt ); ?></span>
-                    <button type="button" class="es-pp-switch <?php echo $atts_default_cycle === 'yearly' ? 'is-yearly' : ''; ?>" id="es-pp-cycle-switch" aria-label="Toggle billing cycle">
-                        <span class="es-pp-switch-thumb"></span>
-                    </button>
-                    <span class="es-pp-toggle-label <?php echo $atts_default_cycle === 'yearly' ? 'is-active' : ''; ?>" data-side="yearly">
-                        <?php echo esc_html( $semester_label_t . $discount_label ); ?>
-                    </span>
-                </div>
-            <?php endif; ?>
         <?php endif; ?>
     </div>
-
-    <!-- ============ PUBLIC BUYER MODAL (email collection → Stripe Checkout) ============ -->
-    <?php if ( ! $valid_link && $stripe_ready ) : ?>
-        <div class="es-pp-buy-modal" id="es-pp-buy-modal" aria-hidden="true">
-            <div class="es-pp-buy-backdrop" id="es-pp-buy-backdrop"></div>
-            <div class="es-pp-buy-card" role="dialog" aria-labelledby="es-pp-buy-title">
-                <button type="button" class="es-pp-buy-close" id="es-pp-buy-close" aria-label="Close">×</button>
-                <div class="es-pp-buy-head">
-                    <div class="es-pp-buy-icon">
-                        <span class="dashicons dashicons-lock"></span>
-                    </div>
-                    <h2 id="es-pp-buy-title">Checkout</h2>
-                    <p class="es-pp-buy-sub" id="es-pp-buy-plan-line">—</p>
-                </div>
-                <form id="es-pp-buy-form" novalidate>
-                    <div class="es-pp-buy-field">
-                        <label for="es-pp-buy-name">Your Name</label>
-                        <input type="text" id="es-pp-buy-name" placeholder="Full name" required />
-                    </div>
-                    <div class="es-pp-buy-field">
-                        <label for="es-pp-buy-email">Email Address</label>
-                        <input type="email" id="es-pp-buy-email" placeholder="you@example.com" required />
-                        <small class="es-pp-buy-hint">We'll send your receipt and account details here.</small>
-                    </div>
-                    <div class="es-pp-buy-error" id="es-pp-buy-error" role="alert"></div>
-                    <button type="submit" class="es-pp-buy-submit" id="es-pp-buy-submit">
-                        <span class="dashicons dashicons-lock"></span>
-                        <span class="es-pp-buy-submit-text">Continue to secure payment</span>
-                    </button>
-                    <p class="es-pp-buy-fine">
-                        You'll be redirected to Stripe to complete your purchase securely.
-                    </p>
-                </form>
-            </div>
-        </div>
-    <?php endif; ?>
 
     <!-- ============ PAYMENT PANEL (RIGHT — slides in) ============ -->
     <?php if ( $valid_link && $student_data ) : ?>
@@ -499,6 +608,14 @@ $discount_label  = $yearly_discount > 0
 
 /* Cycle toggle */
 .es-pp-toggle-wrap{display:flex;align-items:center;justify-content:center;gap:14px;margin:28px auto 6px;font-size:13px;color:#475569}
+.es-pp-toggle-wrap-top{
+    margin:8px auto 22px;
+    background:#f8fafc;
+    border:1px solid #e5e7eb;
+    border-radius:999px;
+    padding:8px 18px;
+    width:fit-content;
+}
 .es-pp-toggle-label{cursor:pointer;user-select:none;transition:color .15s}
 .es-pp-toggle-label.is-active{color:#1e293b;font-weight:600}
 .es-pp-switch{appearance:none;background:#caa657;border:0;width:44px;height:24px;border-radius:999px;position:relative;cursor:pointer;padding:0;transition:background .2s}
@@ -571,6 +688,7 @@ $discount_label  = $yearly_discount > 0
     background:rgba(255,255,255,.04);border-radius:8px;padding:12px 14px;margin:8px 0 14px;
     display:grid;grid-template-columns:1fr auto;row-gap:6px;font-size:13px;
 }
+
 .es-pp-pay-summary-label{color:#94a3b8}
 .es-pp-pay-summary-value{color:#fff;text-align:right;font-weight:500}
 .es-pp-pay-summary-amount{color:#caa657;font-weight:700;font-size:15px;text-align:right}
@@ -589,76 +707,24 @@ $discount_label  = $yearly_discount > 0
     font-size:10px;font-weight:600;padding:4px 8px;border-radius:4px;letter-spacing:.5px;
 }
 
-/* ─── Public Buyer Modal (email collection → Stripe Checkout) ─── */
-.es-pp-buy-modal{
-    position:fixed;inset:0;z-index:99999;display:none;
-    align-items:center;justify-content:center;padding:20px;
-    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+/* ─── "Save X%" discount badge on yearly price ─── */
+.es-pp-save-badge{
+    display:inline-block;
+    background:#10b981;
+    color:#fff;
+    font-size:11px;
+    font-weight:700;
+    padding:3px 8px;
+    border-radius:10px;
+    margin-left:8px;
+    vertical-align:middle;
+    letter-spacing:.3px;
+    text-transform:uppercase;
 }
-.es-pp-buy-modal.is-open{display:flex}
-.es-pp-buy-backdrop{
-    position:absolute;inset:0;background:rgba(15,23,42,0.55);
-    backdrop-filter:blur(2px);
+.es-pp-card.is-featured .es-pp-save-badge{
+    background:#caa657;
+    color:#1e293b;
 }
-.es-pp-buy-card{
-    position:relative;background:#fff;border-radius:14px;
-    max-width:440px;width:100%;padding:32px 28px 24px;
-    box-shadow:0 20px 60px rgba(0,0,0,.25);
-    animation:esBuyIn .25s cubic-bezier(.4,0,.2,1);
-}
-@keyframes esBuyIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
-.es-pp-buy-close{
-    position:absolute;top:10px;right:12px;width:32px;height:32px;
-    border:0;background:transparent;font-size:26px;line-height:1;cursor:pointer;
-    color:#94a3b8;border-radius:50%;transition:background .15s;
-}
-.es-pp-buy-close:hover{background:#f1f5f9;color:#1e293b}
-.es-pp-buy-head{text-align:center;margin-bottom:20px}
-.es-pp-buy-icon{
-    width:52px;height:52px;border-radius:50%;background:#1e293b;color:#caa657;
-    display:inline-flex;align-items:center;justify-content:center;
-    margin-bottom:12px;
-}
-.es-pp-buy-icon .dashicons{font-size:24px;width:24px;height:24px}
-.es-pp-buy-head h2{margin:0 0 6px;font-size:20px;font-weight:600;color:#1e293b}
-.es-pp-buy-sub{margin:0;font-size:13px;color:#64748b}
-.es-pp-buy-field{margin-bottom:14px}
-.es-pp-buy-field label{display:block;font-size:12px;font-weight:600;color:#475569;margin-bottom:6px;letter-spacing:.3px;text-transform:uppercase}
-.es-pp-buy-field input{
-    width:100%;padding:11px 13px;background:#fff;
-    border:1px solid #cbd5e1;border-radius:8px;font-size:14px;color:#1e293b;
-    box-sizing:border-box;transition:border-color .15s,box-shadow .15s;
-}
-.es-pp-buy-field input:focus{outline:none;border-color:#caa657;box-shadow:0 0 0 3px rgba(202,166,87,.18)}
-.es-pp-buy-hint{display:block;font-size:11px;color:#94a3b8;margin-top:5px}
-.es-pp-buy-error{
-    color:#b91c1c;font-size:13px;min-height:18px;margin:4px 0 10px;
-    background:transparent;
-}
-.es-pp-buy-submit{
-    appearance:none;width:100%;padding:13px;background:#1e293b;color:#fff;
-    border:0;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;
-    display:inline-flex;align-items:center;justify-content:center;gap:8px;
-    transition:background .2s,transform .1s;
-}
-.es-pp-buy-submit:hover:not(:disabled){background:#0f172a}
-.es-pp-buy-submit:active:not(:disabled){transform:translateY(1px)}
-.es-pp-buy-submit:disabled{opacity:.7;cursor:wait}
-.es-pp-buy-submit .dashicons{font-size:16px;width:16px;height:16px}
-.es-pp-buy-fine{
-    margin:12px 0 0;font-size:11px;color:#94a3b8;text-align:center;line-height:1.5;
-}
-
-/* Buy button (public mode) — matches "Select This Plan" styling */
-.es-pp-buy-btn{
-    appearance:none;background:#1e293b;color:#fff;border:0;width:100%;
-    padding:11px 14px;border-radius:6px;font-size:13px;font-weight:600;
-    cursor:pointer;transition:all .2s;letter-spacing:.2px;
-}
-.es-pp-buy-btn:hover{background:#0f172a}
-.es-pp-card.is-featured .es-pp-buy-btn{background:#caa657;color:#1e293b}
-.es-pp-card.is-featured .es-pp-buy-btn:hover{background:#b58e3e}
-.es-pp-buy-btn:disabled{opacity:.7;cursor:wait}
 
 /* Mobile */
 @media (max-width:640px){

@@ -39,10 +39,6 @@ class ES_Admin_Ajax {
         add_action( 'wp_ajax_es_stripe_create_checkout',        array( $this, 'stripe_create_checkout' ) );
         add_action( 'wp_ajax_nopriv_es_stripe_create_checkout', array( $this, 'stripe_create_checkout' ) );
 
-        // Stripe Checkout — public pricing page (no token required, any visitor)
-        add_action( 'wp_ajax_es_stripe_public_checkout',        array( $this, 'stripe_public_checkout' ) );
-        add_action( 'wp_ajax_nopriv_es_stripe_public_checkout', array( $this, 'stripe_public_checkout' ) );
-
         // Stripe Elements (inline payment form)
         add_action( 'wp_ajax_es_stripe_create_intent',        array( $this, 'stripe_create_intent' ) );
         add_action( 'wp_ajax_nopriv_es_stripe_create_intent', array( $this, 'stripe_create_intent' ) );
@@ -1020,50 +1016,6 @@ class ES_Admin_Ajax {
     }
 
     /**
-     * PUBLIC pricing-page checkout — no user_id/token required.
-     * Frontend POSTs: package_id, billing_cycle, email, name, nonce.
-     */
-    public function stripe_public_checkout() {
-        check_ajax_referer( 'es_fe_nonce', 'nonce' );
-
-        $package_id    = isset( $_POST['package_id'] ) ? (int) $_POST['package_id'] : 0;
-        $billing_cycle = isset( $_POST['billing_cycle'] ) ? sanitize_text_field( wp_unslash( $_POST['billing_cycle'] ) ) : 'monthly';
-        $email         = isset( $_POST['email'] ) ? sanitize_email( wp_unslash( $_POST['email'] ) ) : '';
-        $name          = isset( $_POST['name'] )  ? sanitize_text_field( wp_unslash( $_POST['name'] ) )  : '';
-
-        if ( ! $package_id ) {
-            wp_send_json_error( array( 'message' => 'Please select a package.' ) );
-        }
-        if ( ! $email || ! is_email( $email ) ) {
-            wp_send_json_error( array( 'message' => 'Please enter a valid email address.' ) );
-        }
-        if ( ! in_array( $billing_cycle, array( 'monthly', 'yearly' ), true ) ) {
-            $billing_cycle = 'monthly';
-        }
-
-        if ( ! class_exists( 'ES_Stripe' ) || ! ES_Stripe::is_enabled() ) {
-            wp_send_json_error( array( 'message' => 'Online checkout is currently unavailable. Please contact us directly.' ) );
-        }
-
-        // If the visitor is already logged in, prefer the tokenless path that
-        // uses their account directly.
-        if ( is_user_logged_in() ) {
-            $u = wp_get_current_user();
-            $email = $email ?: $u->user_email;
-            $name  = $name  ?: $u->display_name;
-        }
-
-        $result = ES_Stripe::create_checkout_session_guest( $package_id, $billing_cycle, $email, $name );
-        if ( is_wp_error( $result ) ) {
-            wp_send_json_error( array( 'message' => $result->get_error_message() ) );
-        }
-
-        wp_send_json_success( array(
-            'url'        => $result['url'],
-            'session_id' => $result['session_id'],
-        ) );
-    }
-    /**
      * Create a Stripe PaymentIntent for the inline Elements form.
      * POSTs: package_id, user_id, token, billing_cycle, name, email.
      * Returns: client_secret, amount label, etc.
@@ -1071,12 +1023,26 @@ class ES_Admin_Ajax {
     public function stripe_create_intent() {
         check_ajax_referer( 'es_fe_nonce', 'nonce' );
 
+        // Defence in depth: the public packages template already requires login,
+        // but the AJAX action is also registered with nopriv_ so anyone could
+        // hit it directly. Reject anonymous requests here too.
+        if ( ! is_user_logged_in() ) {
+            wp_send_json_error( array( 'message' => 'Please log in to continue.' ) );
+        }
+
         $user_id       = isset( $_POST['user_id'] ) ? (int) $_POST['user_id'] : 0;
         $token         = isset( $_POST['token'] ) ? sanitize_text_field( wp_unslash( $_POST['token'] ) ) : '';
         $package_id    = isset( $_POST['package_id'] ) ? (int) $_POST['package_id'] : 0;
         $billing_cycle = isset( $_POST['billing_cycle'] ) ? sanitize_text_field( wp_unslash( $_POST['billing_cycle'] ) ) : 'monthly';
         $name          = isset( $_POST['name'] ) ? sanitize_text_field( wp_unslash( $_POST['name'] ) ) : '';
         $email         = isset( $_POST['email'] ) ? sanitize_email( wp_unslash( $_POST['email'] ) ) : '';
+
+        // The user_id from the form MUST match the currently logged-in user.
+        // This stops a logged-in user from buying packages for someone else
+        // by tampering with the hidden field.
+        if ( $user_id !== get_current_user_id() ) {
+            wp_send_json_error( array( 'message' => 'Account mismatch. Please refresh and try again.' ) );
+        }
 
         if ( ! $user_id || ! $token || ! $package_id ) {
             wp_send_json_error( array( 'message' => 'Invalid request.' ) );
@@ -1124,6 +1090,10 @@ class ES_Admin_Ajax {
     public function stripe_finalize_intent() {
         check_ajax_referer( 'es_fe_nonce', 'nonce' );
 
+        if ( ! is_user_logged_in() ) {
+            wp_send_json_error( array( 'message' => 'Please log in to continue.' ) );
+        }
+
         $pi_id = isset( $_POST['payment_intent_id'] ) ? sanitize_text_field( wp_unslash( $_POST['payment_intent_id'] ) ) : '';
         if ( ! $pi_id ) {
             wp_send_json_error( array( 'message' => 'Missing payment intent id.' ) );
@@ -1131,6 +1101,18 @@ class ES_Admin_Ajax {
 
         if ( ! class_exists( 'ES_Stripe' ) || ! ES_Stripe::is_enabled() ) {
             wp_send_json_error( array( 'message' => 'Stripe is not available.' ) );
+        }
+
+        // Verify the pending row's user_id matches the logged-in user before
+        // finalizing — stops a logged-in user from finalizing someone else's
+        // PaymentIntent (which would assign that package to the wrong user).
+        global $wpdb;
+        $row_user_id = (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT user_id FROM {$wpdb->prefix}es_payments WHERE gateway_session_id = %s LIMIT 1",
+            $pi_id
+        ) );
+        if ( $row_user_id && $row_user_id !== get_current_user_id() ) {
+            wp_send_json_error( array( 'message' => 'This payment belongs to a different account.' ) );
         }
 
         $result = ES_Stripe::finalize_payment_intent( $pi_id );

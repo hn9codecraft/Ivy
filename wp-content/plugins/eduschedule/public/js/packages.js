@@ -190,11 +190,11 @@
             if (!$card.length) return;
 
             var label = currentCycle === 'yearly'
-                ? $card.data('yearly-label')
-                : $card.data('monthly-label');
-
+                ? ($card.data('yearly-label') || '')
+                : ($card.data('monthly-label') || '');
             var name = $card.data('package-name') || '';
-            $('#es-pp-summary-plan').text(name + ' (' + (currentCycle === 'yearly' ? 'Yearly / Semester' : 'Monthly') + ')');
+
+            $('#es-pp-summary-plan').text(name + ' (' + (currentCycle === 'yearly' ? 'Yearly' : 'Monthly') + ')');
             $('#es-pp-summary-amount').text(label);
             $('#es-pp-cycle').val(currentCycle);
             $('.es-pp-pay-submit-text').text('Pay ' + label);
@@ -216,8 +216,7 @@
             $overlay.removeClass('is-open').attr('aria-hidden', 'true');
         }
 
-        // Select This Plan → redirect to hosted Stripe Checkout
-        // (Inline Elements panel kept available as a legacy fallback when needed.)
+        // Select This Plan → open inline payment panel (same page, no redirect)
         $(document).on('click', '.es-pp-select-btn, .es-pkg-pay-btn, .es-pkg-select-btn', function () {
             var $btn = $(this);
             var pkgId = $btn.data('package-id');
@@ -229,13 +228,13 @@
                 return;
             }
 
-            // Preferred flow: hosted Stripe Checkout (you stay off-site for PCI safety)
-            if (window.ES_FE && ES_FE.stripe && ES_FE.stripe.enabled) {
-                redirectToHostedCheckout(pkgId, userId, token, $btn);
+            // Preferred flow: inline Stripe Elements panel — stays on this page
+            if (stripeReady && $panel.length) {
+                openPanel(pkgId);
                 return;
             }
 
-            // No Stripe — simple selection (mark as chosen)
+            // No Stripe — simple selection (mark as chosen, no payment)
             if (!confirm('Confirm your selection?')) return;
             selectPackage(pkgId, userId, token, $btn);
         });
@@ -261,7 +260,12 @@
             var token = $('#es-pp-token').val();
             var name = $('#es-pp-name').val().trim();
             var email = $('#es-pp-email').val().trim();
-            var cycle = $('#es-pp-cycle').val() || currentCycle;
+
+            // Always trust currentCycle as the single source of truth — the
+            // hidden field is kept in sync, but if it ever drifted, currentCycle
+            // is what the user just saw on screen. That's what we charge.
+            var cycle = currentCycle;
+            $('#es-pp-cycle').val(cycle);
 
             if (!name) { $('#es-pp-name').focus(); alert('Please enter your name.'); return; }
             if (!email || email.indexOf('@') === -1) { $('#es-pp-email').focus(); alert('Please enter a valid email.'); return; }
@@ -344,18 +348,27 @@
                     }
                     // Success — replace the panel content with a thank-you state.
                     var data = res.data || {};
+                    var validLine = data.valid_until
+                        ? '<div style="color:#94a3b8;font-size:12px;margin:14px 0 4px">Active Until</div>' +
+                          '<div style="color:#fff;font-weight:500">' + data.valid_until + '</div>'
+                        : '';
                     var thanksHtml =
-                        '<div style="text-align:center;padding:40px 10px">' +
-                        '  <div style="font-size:56px;color:#10b981;margin-bottom:14px">✓</div>' +
-                        '  <h2 style="color:#fff;font-size:22px;margin:0 0 8px">Payment Successful</h2>' +
-                        '  <p style="color:#cbd5e1;font-size:14px;margin:0 0 18px">A receipt has been emailed to you.</p>' +
-                        '  <div style="background:rgba(255,255,255,.06);border-radius:8px;padding:14px;color:#fff;font-size:14px;text-align:left">' +
-                        '    <div style="color:#94a3b8;font-size:12px;margin-bottom:4px">Plan</div>' +
-                        '    <div style="font-weight:600;margin-bottom:10px">' + (data.package_name || '') + '</div>' +
-                        '    <div style="color:#94a3b8;font-size:12px;margin-bottom:4px">Amount</div>' +
-                        '    <div style="color:#caa657;font-weight:700;font-size:16px">' + (data.amount_label || '') + '</div>' +
+                        '<div class="es-pp-pay-thanks" style="text-align:center;padding:30px 6px 10px">' +
+                        '  <div style="width:64px;height:64px;border-radius:50%;background:#10b981;display:inline-flex;align-items:center;justify-content:center;margin-bottom:16px">' +
+                        '    <span style="font-size:34px;color:#fff;line-height:1">✓</span>' +
                         '  </div>' +
-                        '  <button type="button" class="es-pp-pay-submit" style="margin-top:18px" onclick="window.location.reload()">Done</button>' +
+                        '  <h2 style="color:#fff;font-size:22px;margin:0 0 6px;font-weight:600">Payment Successful</h2>' +
+                        '  <p style="color:#cbd5e1;font-size:14px;margin:0 0 20px">Thank you! A receipt has been emailed to you.</p>' +
+                        '  <div style="background:rgba(255,255,255,.06);border-radius:10px;padding:16px 18px;color:#fff;font-size:14px;text-align:left">' +
+                        '    <div style="color:#94a3b8;font-size:12px;margin-bottom:4px">Plan</div>' +
+                        '    <div style="font-weight:600;margin-bottom:12px">' + (data.package_name || '') + '</div>' +
+                        '    <div style="color:#94a3b8;font-size:12px;margin-bottom:4px">Amount Paid</div>' +
+                        '    <div style="color:#caa657;font-weight:700;font-size:18px">' + (data.amount_label || '') + '</div>' +
+                        validLine +
+                        '  </div>' +
+                        '  <button type="button" class="es-pp-pay-submit" style="margin-top:22px" onclick="window.location.reload()">' +
+                        '    Done' +
+                        '  </button>' +
                         '</div>';
                     $('#es-pp-pay-form').replaceWith(thanksHtml);
                 },
@@ -396,109 +409,6 @@
                 }
             });
         }
-
-        /* ─── PUBLIC PRICING PAGE — Buy Now flow (no token required) ───
-         * 1) User clicks "Select This Plan" on a card → modal opens to collect
-         *    name + email + chosen billing cycle.
-         * 2) Submit → server creates a Stripe Checkout Session → redirect.
-         * 3) On return, finalize_session() creates a WP user if needed and
-         *    sends the receipt email.
-         */
-        var $buyModal = $('#es-pp-buy-modal');
-
-        function openBuyModal(pkgId, pkgName) {
-            if (!$buyModal.length) return;
-
-            var $card = $('.es-pp-card[data-package-id="' + pkgId + '"]');
-            var amountLabel = currentCycle === 'yearly'
-                ? ($card.data('yearly-label') || '')
-                : ($card.data('monthly-label') || '');
-
-            $buyModal.data('package-id', pkgId);
-            $('#es-pp-buy-plan-line').text(
-                pkgName + ' · ' + amountLabel +
-                ' (' + (currentCycle === 'yearly' ? 'Yearly' : 'Monthly') + ')'
-            );
-            $('#es-pp-buy-error').text('');
-            $('#es-pp-buy-submit').prop('disabled', false);
-            $('.es-pp-buy-submit-text').text('Continue to secure payment');
-            $buyModal.addClass('is-open').attr('aria-hidden', 'false');
-            setTimeout(function () { $('#es-pp-buy-name').trigger('focus'); }, 100);
-        }
-
-        function closeBuyModal() {
-            $buyModal.removeClass('is-open').attr('aria-hidden', 'true');
-        }
-
-        $(document).on('click', '.es-pp-buy-btn', function () {
-            var $btn = $(this);
-            var pkgId = $btn.data('package-id');
-            var pkgName = $btn.data('package-name') || '';
-            if (!pkgId) return;
-            openBuyModal(pkgId, pkgName);
-        });
-
-        $(document).on('click', '#es-pp-buy-close, #es-pp-buy-backdrop', closeBuyModal);
-
-        $(document).on('keydown', function (e) {
-            if (e.key === 'Escape' && $buyModal.hasClass('is-open')) closeBuyModal();
-        });
-
-        $(document).on('submit', '#es-pp-buy-form', function (e) {
-            e.preventDefault();
-
-            var pkgId = $buyModal.data('package-id');
-            var name  = $('#es-pp-buy-name').val().trim();
-            var email = $('#es-pp-buy-email').val().trim();
-
-            if (!pkgId) {
-                $('#es-pp-buy-error').text('Please select a package first.');
-                return;
-            }
-            if (!name) {
-                $('#es-pp-buy-error').text('Please enter your name.');
-                $('#es-pp-buy-name').trigger('focus');
-                return;
-            }
-            if (!email || email.indexOf('@') === -1 || email.indexOf('.') === -1) {
-                $('#es-pp-buy-error').text('Please enter a valid email address.');
-                $('#es-pp-buy-email').trigger('focus');
-                return;
-            }
-
-            $('#es-pp-buy-error').text('');
-            var $submit = $('#es-pp-buy-submit');
-            $submit.prop('disabled', true);
-            $('.es-pp-buy-submit-text').text('Redirecting to Stripe…');
-
-            $.ajax({
-                url: ES_FE.ajax_url,
-                method: 'POST',
-                data: {
-                    action: 'es_stripe_public_checkout',
-                    nonce: ES_FE.nonce,
-                    package_id: pkgId,
-                    billing_cycle: currentCycle,
-                    name: name,
-                    email: email
-                },
-                success: function (res) {
-                    if (res.success && res.data && res.data.url) {
-                        window.location.href = res.data.url;
-                    } else {
-                        var msg = (res && res.data && res.data.message) || 'Could not start checkout. Please try again.';
-                        $('#es-pp-buy-error').text(msg);
-                        $submit.prop('disabled', false);
-                        $('.es-pp-buy-submit-text').text('Continue to secure payment');
-                    }
-                },
-                error: function () {
-                    $('#es-pp-buy-error').text('Network error. Please check your connection and try again.');
-                    $submit.prop('disabled', false);
-                    $('.es-pp-buy-submit-text').text('Continue to secure payment');
-                }
-            });
-        });
 
         $(document).on('click', '.es-pkg-contact-btn', function () {
             alert('Please contact us to learn more about this package.');

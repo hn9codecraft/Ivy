@@ -1,15 +1,26 @@
-# EduSchedule v3.9.0
+# EduSchedule v3.9.2
 
-A modern booking platform for educators, coaches, and consultants. Frontend register/login/dashboard with a pink theme, dark indigo admin, slot-based bookings (1:1 / Group / Open / Personal), Zoom auto-create, country-aware timezones, and **public pricing page with Stripe Checkout and multi-currency Monthly / Yearly billing**.
+A modern booking platform for educators, coaches, and consultants. Frontend register/login/dashboard with a pink theme, dark indigo admin, slot-based bookings (1:1 / Group / Open / Personal), Zoom auto-create, country-aware timezones, and **logged-in pricing page with inline Stripe Elements and multi-currency Monthly / Yearly billing**.
 
 > Designed to run **alongside** the original Course Booking Calendar (v2.x) — separate plugin slug, separate database tables, no conflicts.
 
+## What's New in v3.9.2
+
+- **Inline payment is back — no redirect.** *Select This Plan* now slides the secure payment panel into the same page (Stripe Elements card field, name, email, order summary). Card details enter Stripe-hosted Elements (PCI-compliant — your server never sees the card). After paying, the form is swapped for an inline thank-you state showing plan, amount paid, and active-until date, without leaving the page.
+- **Login required to view and buy packages.** The `[eduschedule_packages]` shortcode now requires the visitor to be logged in. Anonymous visitors see a clean "Login Required" card with a *Log in to continue* button that returns them to the pricing page after authenticating (and a *Sign up* link if registration is open).
+- **Personalised links are bound to the recipient.** A `?user_id=X&token=Y` link only works for the user it was issued to. If a different account is logged in, they see a clear message: "This personalised link belongs to a different account." Expired tokens get their own message: "This link has expired or is invalid."
+- **Logged-in self-serve.** Any logged-in user can buy any active package without a personalised link — the page mints a short-lived token on the fly for the inline payment flow.
+- **"Save X%" badge on every yearly price.** When the global Yearly Discount is set, each card shows a green Save X% badge next to the yearly amount so the discount is visible at a glance, not just hidden in the toggle label.
+- **Defence-in-depth on payment AJAX.** `stripe_create_intent` and `stripe_finalize_intent` now require a logged-in session AND verify that the form's `user_id` matches the current user before charging. Prevents a logged-in user from purchasing on behalf of someone else by tampering with hidden fields.
+- **Email on purchase** (already in 3.8 — unchanged): student gets a styled HTML receipt; admin gets a plain-text notification with all order details.
+- **Email on After Call submit** (already in 3.7 — unchanged): student gets the personalised package selection link plus any *Additional Comments* the admin typed; admin gets a summary email.
+
 ## What's New in v3.9.0
 
-- **Public pricing page with self-serve Stripe Checkout.** The `[eduschedule_packages]` shortcode now works as a real pricing page for any visitor — not just personalised links. When Stripe is enabled, each card shows a *Select This Plan* button that opens a small modal collecting name + email, then redirects the buyer to the hosted Stripe Checkout page. After payment, a WP user account is created automatically (or matched if the email already exists), the package is assigned, the validity period is set, and a confirmation email is sent. The "Contact Us" fallback only shows when Stripe is disabled.
-- **Hosted Stripe Checkout is now the default flow** for the personalised "Decision Hub" link as well. Clicking *Select This Plan* on a tokenized link redirects to Stripe's hosted page instead of opening an inline form on your site. This is more secure (card data never touches your server, PCI-DSS SAQ-A), supports more payment methods automatically (Apple Pay, Google Pay, regional methods), and gives a more familiar checkout experience. The inline Elements code remains in place for backwards compatibility but is no longer the primary path.
-- **Monthly / Yearly toggle is now visible on public pricing pages** (not only personalised links). The discount % shown in the toggle label still comes from *Settings → Currency & Billing → Yearly Discount*.
-- **Cleaner admin pricing model.** The admin only enters one number per package: the **monthly price**. The frontend toggle automatically computes yearly = `monthly × 12 − global discount %`. There are no per-package yearly fields, no Stripe Price IDs to wire up, no extra subscription configuration. Both the customer-facing card AND the amount charged in Stripe use the same formula, so what the buyer sees is exactly what they pay.
+- **Public pricing page with self-serve Stripe Checkout** *(superseded in 3.9.2 — login is now required)*.
+- **Hosted Stripe Checkout default** *(superseded in 3.9.2 — inline Elements is the default again)*.
+- **Monthly / Yearly toggle on public pricing pages.** *(retained — now login-gated)*.
+- **Admin enters only the monthly price.** Frontend toggle automatically computes yearly = `monthly × 12 − global discount %`.
 
 ## What's New in v3.8.0
 
