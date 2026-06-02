@@ -1,60 +1,78 @@
+/* =========================================
+   COURSE QUIZ FORM — DARK THEME WITH RED ACCENT
+   Covers: radio, checkbox, select, text,
+           textarea, number, email, phone,
+           date, file upload, name, address
+   ========================================= */
+
+/* ── Section wrapper ── */
+.course-questions {
+  padding: 100px 0;
+  background: #010717;
+  min-height: 100vh;
+  position:relative;
+}
 
 /* ── Wrapper Card ── */
 #gform_wrapper_1 {
-  background: #0f1120 !important;
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
-  border-radius: 20px !important;
-  padding: 44px 48px !important;
-  max-width: 700px !important;
-  margin: 60px auto !important;
+  background: #0d0f1e !important;
+  border: 1px solid rgba(255, 255, 255, 0.07) !important;
+  border-radius: 18px !important;
+  padding: 52px 56px !important;
+  max-width: 60% !important;
+  margin: 0 auto !important;
   box-shadow:
-    0 0 0 1px rgba(255, 45, 85, 0.08),
-    0 30px 80px rgba(0, 0, 0, 0.6),
-    0 0 80px rgba(255, 45, 85, 0.07) !important;
-  font-family: 'DM Sans', sans-serif !important;
+    0 0 0 1px rgba(255, 45, 85, 0.06),
+    0 40px 100px rgba(0, 0, 0, 0.7),
+    0 0 120px rgba(255, 45, 85, 0.06) !important;
+  
   position: relative !important;
+  overflow: visible !important;
 }
 
 /* Ambient glow behind card */
-#gform_wrapper_1::before {
+.course-questions::before {
   content: '';
-  position: absolute;
-  top: -60px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 500px;
-  height: 200px;
-  background: radial-gradient(ellipse, rgba(255, 45, 85, 0.15) 0%, transparent 70%);
-  pointer-events: none;
-  z-index: -1;
-  border-radius: 50%;
+   position: absolute;
+    top: -170px;
+    left: 0px;
+    width: 500px;
+    height: 500px;
+    background: #e326520d;
+    pointer-events: none;
+    border-radius: 100%;
 }
+
 
 /* ── Form heading ── */
 #gform_wrapper_1 .gform_heading {
-  margin-bottom: 32px !important;
+  margin-bottom: 36px !important;
+  position: relative;
+  z-index: 1;
+  display: none;
 }
 
 #gform_wrapper_1 .gform_title {
-  font-family: 'Syne', sans-serif !important;
-  font-size: 12px !important;
+  font-size: 11px !important;
   font-weight: 700 !important;
-  letter-spacing: 0.2em !important;
+  letter-spacing: 0.22em !important;
   text-transform: uppercase !important;
   color: #ff2d55 !important;
-  margin-bottom: 4px !important;
+  margin-bottom: 6px !important;
 }
 
 #gform_wrapper_1 .gform_description {
-  color: rgba(255, 255, 255, 0.5) !important;
+  color: rgba(255, 255, 255, 0.45) !important;
   font-size: 14px !important;
+  font-weight: 400 !important;
+  line-height: 1.6 !important;
 }
 
-/* ── Step progress bar ── */
+/* ── Step progress bar (segmented) ── */
 #gform_wrapper_1 .gf_page_steps {
   display: flex !important;
-  gap: 6px !important;
-  margin-bottom: 40px !important;
+  gap: 5px !important;
+  margin-bottom: 44px !important;
   align-items: center !important;
   list-style: none !important;
   padding: 0 !important;
@@ -62,11 +80,12 @@
 
 #gform_wrapper_1 .gf_step {
   flex: 1 !important;
-  height: 4px !important;
+  height: 3px !important;
   border-radius: 99px !important;
-  background: rgba(255, 255, 255, 0.1) !important;
+  background: rgba(255, 255, 255, 0.08) !important;
   overflow: hidden !important;
-  transition: background 0.3s ease !important;
+  transition: background 0.35s ease !important;
+  position: relative !important;
 }
 
 #gform_wrapper_1 .gf_step .gf_step_number,
@@ -74,50 +93,88 @@
   display: none !important;
 }
 
-#gform_wrapper_1 .gf_step_active,
-#gform_wrapper_1 .gf_step_completed {
+#gform_wrapper_1 .gf_step_active {
   background: #ff2d55 !important;
-  box-shadow: 0 0 10px rgba(255, 45, 85, 0.5) !important;
+  box-shadow: 0 0 8px rgba(255, 45, 85, 0.55) !important;
 }
 
-/* ── Question fieldset ── */
+#gform_wrapper_1 .gf_step_completed {
+  background: rgba(255, 45, 85, 0.5) !important;
+}
+
+/* ── Question step counter label (above question) ── */
+#gform_wrapper_1 .gform_page_fields > .gfield:first-child .gfield_label::before,
+#gform_wrapper_1 .gsection_title {
+  
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.22em !important;
+  text-transform: uppercase !important;
+  color: #ff2d55 !important;
+}
+
+/* ── Question label / legend ── */
+#gform_wrapper_1  .gfield--type-radio .gfield_label,
+#gform_wrapper_1 .gfield--type-radio legend.gfield_label,
+#gform_wrapper_1  .gfield--type-choice .gfield_label,
+#gform_wrapper_1 .gfield--type-choice legend.gfield_label,
+#gform_wrapper_1  .gfield--type-select .gfield_label,
+#gform_wrapper_1 .gfield--type-select legend.gfield_label
+ {
+  font-size: 32px !important;
+  font-weight: 700 !important;
+  letter-spacing: -0.01em !important;
+  text-transform: none !important;
+  color: #ffffff !important;
+  margin-bottom: 24px !important;
+  line-height: 1.35 !important;
+  display: block !important;
+
+}
+
+#gform_wrapper_1  .gfield_label,
+#gform_wrapper_1 legend.gfield_label{
+    color: #ffffff !important;
+  font-size: 20px !important;
+}
+
+/* Sub-label / description under question */
+#gform_wrapper_1 .gfield_description {
+  display:none
+}
+
+/* ── Required asterisk ── */
+#gform_wrapper_1 .gfield_required {
+  color: #ff2d55 !important;
+  margin-left: 3px !important;
+}
+
+/* ── Fieldset reset ── */
 #gform_wrapper_1 fieldset.gfield {
   border: none !important;
   padding: 0 !important;
-  margin: 0 !important;
+  margin: 0 0 28px !important;
 }
 
-/* ── Question label (legend) ── */
-#gform_wrapper_1 .gfield_label {
-  font-family: 'Syne', sans-serif !important;
-   display: block !important;
-  font-family: 'DM Sans', sans-serif !important;
-  font-size: 11px !important;
-  font-weight: 600 !important;
-  letter-spacing: 0.18em !important;
-  text-transform: uppercase !important;
-  color: #ff2d55 !important;
-  margin-bottom: 10px !important;
+#gform_wrapper_1 .gfield {
+  margin-bottom: 28px !important;
 }
 
-
-
-/* ── Radio options container ── */
+/* ==============================================
+   RADIO BUTTONS
+   ============================================== */
 #gform_wrapper_1 .gfield_radio {
   display: flex !important;
   flex-direction: column !important;
-  gap: 10px !important;
-  margin-top: 20px !important;
+  gap: 6px !important;
+  margin-top: 4px !important;
 }
 
-/* ── Individual choice row ── */
 #gform_wrapper_1 .gchoice {
   display: flex !important;
   align-items: center !important;
   gap: 14px !important;
-  background: rgba(255, 255, 255, 0.04) !important;
-  border: 1px solid rgba(255, 255, 255, 0.09) !important;
-  border-radius: 12px !important;
+  background: rgba(255, 255, 255, 0.035) !important;
   padding: 16px 20px !important;
   cursor: pointer !important;
   transition:
@@ -125,33 +182,46 @@
     border-color 0.22s ease,
     transform 0.22s ease,
     box-shadow 0.22s ease !important;
+    position: relative;
+}
+#gform_wrapper_1 .gchoice:first-child{
+  border-radius:12px 12px 0px 0px
 }
 
+#gform_wrapper_1 .gchoice:last-child{
+  border-radius:0px 0px 12px 12px 
+  
+}
 #gform_wrapper_1 .gchoice:hover {
-  background: rgba(255, 45, 85, 0.07) !important;
-  border-color: rgba(255, 45, 85, 0.35) !important;
-  transform: translateX(4px) !important;
-  box-shadow: 0 4px 20px rgba(255, 45, 85, 0.1) !important;
+  background: #cbcbcb1f !important;
 }
 
 #gform_wrapper_1 .gchoice:has(input:checked) {
-  background: rgba(255, 45, 85, 0.12) !important;
-  border-color: #ff2d55 !important;
+  background: rgba(255, 45, 85, 0.1) !important;
+  border-color: transparent !important;
   box-shadow:
-    0 0 0 1px #ff2d55,
-    0 4px 24px rgba(255, 45, 85, 0.2) !important;
-  transform: translateX(4px) !important;
+    0 0 0 1px rgba(255, 45, 85, 0.4),
+    0 4px 24px rgba(255, 45, 85, 0.15) !important;
 }
-
-/* ── Custom radio input ── */
-#gform_wrapper_1 .gfield-choice-input[type="radio"] {
+.gform_wrapper .gchoice  .gform-field-label:after{
+  content: "";
+  position: absolute;
+  top: 0;
+  left:0;
+  width: 100%;
+  height: 100%;
+  cursor:pointer
+}
+/* Custom radio input */
+#gform_wrapper_1 .gfield-choice-input[type="radio"],
+#gform_wrapper_1 input[type="radio"] {
   appearance: none !important;
   -webkit-appearance: none !important;
   width: 20px !important;
   height: 20px !important;
   min-width: 20px !important;
   border-radius: 50% !important;
-  border: 2px solid rgba(255, 255, 255, 0.2) !important;
+  border: 2px solid rgba(255, 255, 255, 0.18) !important;
   background: transparent !important;
   cursor: pointer !important;
   position: relative !important;
@@ -160,9 +230,11 @@
     background 0.2s ease,
     box-shadow 0.2s ease !important;
   margin: 0 !important;
+  flex-shrink: 0 !important;
 }
 
-#gform_wrapper_1 .gfield-choice-input[type="radio"]:checked {
+#gform_wrapper_1 .gfield-choice-input[type="radio"]:checked,
+#gform_wrapper_1 input[type="radio"]:checked {
   border-color: #ff2d55 !important;
   background: #ff2d55 !important;
   box-shadow:
@@ -170,7 +242,8 @@
     0 0 12px rgba(255, 45, 85, 0.4) !important;
 }
 
-#gform_wrapper_1 .gfield-choice-input[type="radio"]:checked::after {
+#gform_wrapper_1 .gfield-choice-input[type="radio"]:checked::after,
+#gform_wrapper_1 input[type="radio"]:checked::after {
   content: '' !important;
   display: block !important;
   width: 6px !important;
@@ -183,14 +256,100 @@
   transform: translate(-50%, -50%) !important;
 }
 
-/* ── Option label text ── */
-#gform_wrapper_1 .gform-field-label--type-inline {
-  font-family: 'DM Sans', sans-serif !important;
+/* ==============================================
+   CHECKBOXES
+   ============================================== */
+#gform_wrapper_1 .gfield_checkbox {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px !important;
+  margin-top: 4px !important;
+}
+
+#gform_wrapper_1 .gfield_checkbox .gchoice {
+  display: flex !important;
+  align-items: center !important;
+  gap: 14px !important;
+  background: rgba(255, 255, 255, 0.035) !important;
+  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border-radius: 12px !important;
+  padding: 16px 20px !important;
+  cursor: pointer !important;
+  transition:
+    background 0.22s ease,
+    border-color 0.22s ease,
+    transform 0.22s ease,
+    box-shadow 0.22s ease !important;
+}
+
+#gform_wrapper_1 .gfield_checkbox .gchoice:hover {
+  background: rgba(255, 45, 85, 0.07) !important;
+  border-color: rgba(255, 45, 85, 0.3) !important;
+}
+
+#gform_wrapper_1 .gfield_checkbox .gchoice:has(input:checked) {
+  background: rgba(255, 45, 85, 0.1) !important;
+  border-color: #ff2d55 !important;
+  box-shadow:
+    0 0 0 1px rgba(255, 45, 85, 0.4),
+    0 4px 24px rgba(255, 45, 85, 0.15) !important;
+}
+
+/* Custom checkbox */
+#gform_wrapper_1 .gfield-choice-input[type="checkbox"],
+#gform_wrapper_1 input[type="checkbox"] {
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  width: 20px !important;
+  height: 20px !important;
+  min-width: 20px !important;
+  border-radius: 6px !important;
+  border: 2px solid rgba(255, 255, 255, 0.18) !important;
+  background: transparent !important;
+  cursor: pointer !important;
+  position: relative !important;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    box-shadow 0.2s ease !important;
+  margin: 0 !important;
+  flex-shrink: 0 !important;
+}
+
+#gform_wrapper_1 .gfield-choice-input[type="checkbox"]:checked,
+#gform_wrapper_1 input[type="checkbox"]:checked {
+  border-color: #ff2d55 !important;
+  background: #ff2d55 !important;
+  box-shadow:
+    0 0 0 3px rgba(255, 45, 85, 0.2),
+    0 0 12px rgba(255, 45, 85, 0.35) !important;
+}
+
+#gform_wrapper_1 .gfield-choice-input[type="checkbox"]:checked::after,
+#gform_wrapper_1 input[type="checkbox"]:checked::after {
+  content: '' !important;
+  display: block !important;
+  width: 10px !important;
+  height: 6px !important;
+  border-left: 2px solid #fff !important;
+  border-bottom: 2px solid #fff !important;
+  position: absolute !important;
+  top: 44% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) rotate(-45deg) !important;
+}
+
+/* ==============================================
+   CHOICE LABEL TEXT (radio + checkbox)
+   ============================================== */
+#gform_wrapper_1 .gform-field-label--type-inline,
+#gform_wrapper_1 .gfield_checkbox .gform-field-label--type-inline {
+  
   font-size: 15px !important;
   font-weight: 400 !important;
-  color: rgba(255, 255, 255, 0.85) !important;
+  color: rgba(255, 255, 255, 0.78) !important;
   cursor: pointer !important;
-  line-height: 1.4 !important;
+  line-height: 1.45 !important;
   letter-spacing: 0.01em !important;
   transition: color 0.2s ease !important;
   margin: 0 !important;
@@ -201,114 +360,586 @@
   color: #ffffff !important;
 }
 
-/* ── Page footer ── */
+/* ==============================================
+   SELECT DROPDOWN
+   ============================================== */
+#gform_wrapper_1 select,
+#gform_wrapper_1 .gfield select {
+  
+  font-size: 15px !important;
+  font-weight: 400 !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 12px !important;
+  padding: 8px 44px 8px 18px !important;
+  min-height:54px;
+  width: 100% !important;
+  cursor: pointer !important;
+  outline: none !important;
+  appearance: none !important;
+  -webkit-appearance: none !important;
+  background-repeat: no-repeat !important;
+  background-position: right 16px center !important;
+  transition:
+    border-color 0.22s ease,
+    background 0.22s ease,
+    box-shadow 0.22s ease !important;
+}
+
+#gform_wrapper_1 select:hover {
+  border-color: rgba(255, 45, 85, 0.35) !important;
+  background-color: rgba(255, 45, 85, 0.05) !important;
+}
+
+#gform_wrapper_1 select:focus {
+  border-color: #ff2d55 !important;
+  background-color: rgba(255, 45, 85, 0.07) !important;
+  box-shadow:
+    0 0 0 3px rgba(255, 45, 85, 0.15),
+    0 4px 20px rgba(255, 45, 85, 0.1) !important;
+}
+
+#gform_wrapper_1 select option {
+  background: #1a1c2e !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+}
+
+/* ==============================================
+   TEXT / EMAIL / PHONE / NUMBER / URL INPUTS
+   ============================================== */
+#gform_wrapper_1 input[type="text"],
+#gform_wrapper_1 input[type="email"],
+#gform_wrapper_1 input[type="tel"],
+#gform_wrapper_1 input[type="number"],
+#gform_wrapper_1 input[type="url"],
+#gform_wrapper_1 input[type="password"],
+#gform_wrapper_1 .ginput_container input[type="text"] {
+  
+  font-size: 15px !important;
+  font-weight: 400 !important;
+  color: rgba(255, 255, 255, 0.9) !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 12px !important;
+  padding: 8px 18px !important;
+  width: 100% !important;
+  outline: none !important;
+  min-height:54px;
+  transition:
+    border-color 0.22s ease,
+    background 0.22s ease,
+    box-shadow 0.22s ease !important;
+  box-sizing: border-box !important;
+}
+
+#gform_wrapper_1 input[type="text"]:hover,
+#gform_wrapper_1 input[type="email"]:hover,
+#gform_wrapper_1 input[type="tel"]:hover,
+#gform_wrapper_1 input[type="number"]:hover,
+#gform_wrapper_1 input[type="url"]:hover {
+  border-color: rgba(255, 45, 85, 0.35) !important;
+  background: rgba(255, 45, 85, 0.04) !important;
+}
+
+#gform_wrapper_1 input[type="text"]:focus,
+#gform_wrapper_1 input[type="email"]:focus,
+#gform_wrapper_1 input[type="tel"]:focus,
+#gform_wrapper_1 input[type="number"]:focus,
+#gform_wrapper_1 input[type="url"]:focus,
+#gform_wrapper_1 input[type="password"]:focus {
+  border-color: #ff2d55 !important;
+  background: rgba(255, 45, 85, 0.07) !important;
+  box-shadow:
+    0 0 0 3px rgba(255, 45, 85, 0.15),
+    0 4px 20px rgba(255, 45, 85, 0.08) !important;
+}
+
+#gform_wrapper_1 input::placeholder {
+  color: rgba(255, 255, 255, 0.25) !important;
+}
+
+/* ==============================================
+   TEXTAREA
+   ============================================== */
+#gform_wrapper_1 textarea {
+  
+  font-size: 15px !important;
+  font-weight: 400 !important;
+  color: rgba(255, 255, 255, 0.9) !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 12px !important;
+  padding: 16px 18px !important;
+  width: 100% !important;
+  min-height: 130px !important;
+  resize: vertical !important;
+  outline: none !important;
+  line-height: 1.6 !important;
+  transition:
+    border-color 0.22s ease,
+    background 0.22s ease,
+    box-shadow 0.22s ease !important;
+  box-sizing: border-box !important;
+}
+
+#gform_wrapper_1 textarea:hover {
+  border-color: rgba(255, 45, 85, 0.35) !important;
+  background: rgba(255, 45, 85, 0.04) !important;
+}
+
+#gform_wrapper_1 textarea:focus {
+  border-color: #ff2d55 !important;
+  background: rgba(255, 45, 85, 0.07) !important;
+  box-shadow:
+    0 0 0 3px rgba(255, 45, 85, 0.15),
+    0 4px 20px rgba(255, 45, 85, 0.08) !important;
+}
+
+#gform_wrapper_1 textarea::placeholder {
+  color: rgba(255, 255, 255, 0.25) !important;
+}
+
+/* ==============================================
+   DATE FIELD
+   ============================================== */
+#gform_wrapper_1 input[type="date"],
+#gform_wrapper_1 .ginput_container_date input {
+  
+  font-size: 15px !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border-radius: 12px !important;
+  padding: 13px 18px !important;
+  width: 100% !important;
+  outline: none !important;
+  color-scheme: dark !important;
+  transition:
+    border-color 0.22s ease,
+    box-shadow 0.22s ease !important;
+  box-sizing: border-box !important;
+}
+
+#gform_wrapper_1 input[type="date"]:focus {
+  border-color: #ff2d55 !important;
+  box-shadow: 0 0 0 3px rgba(255, 45, 85, 0.15) !important;
+}
+
+/* Datepicker */
+#gform_wrapper_1 .ui-datepicker {
+  background: #1a1c2e !important;
+  border: 1px solid rgba(255, 45, 85, 0.25) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6) !important;
+  color: rgba(255,255,255,0.85) !important;
+}
+
+#gform_wrapper_1 .ui-datepicker-header {
+  background: rgba(255,45,85,0.1) !important;
+  border-bottom: 1px solid rgba(255,255,255,0.07) !important;
+  border-radius: 12px 12px 0 0 !important;
+  color: #fff !important;
+}
+
+#gform_wrapper_1 .ui-datepicker td a,
+#gform_wrapper_1 .ui-datepicker td span {
+  color: rgba(255,255,255,0.75) !important;
+  border-radius: 6px !important;
+}
+
+#gform_wrapper_1 .ui-datepicker td a:hover {
+  background: rgba(255,45,85,0.2) !important;
+  color: #fff !important;
+}
+
+#gform_wrapper_1 .ui-datepicker .ui-state-active {
+  background: #ff2d55 !important;
+  color: #fff !important;
+}
+
+/* ==============================================
+   FILE UPLOAD
+   ============================================== */
+#gform_wrapper_1 .ginput_container_fileupload,
+#gform_wrapper_1 .gform_fileupload_multifile {
+  background: rgba(255, 255, 255, 0.03) !important;
+  border: 1.5px dashed rgba(255, 255, 255, 0.12) !important;
+  border-radius: 12px !important;
+  padding: 28px 24px !important;
+  text-align: center !important;
+  transition: border-color 0.22s ease, background 0.22s ease !important;
+  cursor: pointer !important;
+}
+
+#gform_wrapper_1 .ginput_container_fileupload:hover,
+#gform_wrapper_1 .gform_fileupload_multifile:hover {
+  border-color: rgba(255, 45, 85, 0.45) !important;
+  background: rgba(255, 45, 85, 0.04) !important;
+}
+
+#gform_wrapper_1 input[type="file"] {
+      font-size: 14px !important;
+    color: rgba(255, 255, 255, 0.55) !important;
+    cursor: pointer !important;
+    width: 100% !important;
+    background: transparent;
+    border: none;
+}
+
+#gform_wrapper_1 input[type="file"]::file-selector-button {
+  
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  color: #ffffff !important;
+  background: #ff2d55 !important;
+  border: none !important;
+  border-radius: 50px !important;
+  padding: 8px 20px !important;
+  cursor: pointer !important;
+  margin-right: 14px !important;
+  transition: background 0.2s ease !important;
+}
+
+#gform_wrapper_1 input[type="file"]::file-selector-button:hover {
+  background: #cc0033 !important;
+}
+
+/* ==============================================
+   NAME FIELD (compound)
+   ============================================== */
+#gform_wrapper_1 .ginput_complex.ginput_container_name {
+  display: flex !important;
+  gap: 14px !important;
+}
+
+#gform_wrapper_1 .ginput_complex .ginput_full,
+#gform_wrapper_1 .ginput_complex .ginput_left,
+#gform_wrapper_1 .ginput_complex .ginput_right {
+  flex: 1 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 6px !important;
+}
+
+#gform_wrapper_1 .ginput_complex label,
+#gform_wrapper_1 .ginput_complex .gf_name_prefix label {
+  
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.1em !important;
+  text-transform: uppercase !important;
+  color: rgba(255, 255, 255, 0.35) !important;
+  margin: 0 !important;
+}
+
+/* ==============================================
+   ADDRESS FIELD (compound)
+   ============================================== */
+#gform_wrapper_1 .ginput_container_address {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 10px !important;
+}
+
+#gform_wrapper_1 .ginput_container_address .ginput_full,
+#gform_wrapper_1 .ginput_container_address .ginput_left,
+#gform_wrapper_1 .ginput_container_address .ginput_right {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+}
+
+#gform_wrapper_1 .ginput_container_address .address_line_1,
+#gform_wrapper_1 .ginput_container_address .address_line_2,
+#gform_wrapper_1 .ginput_container_address .ginput_left,
+#gform_wrapper_1 .ginput_container_address .ginput_right {
+  flex: 1 !important;
+}
+
+#gform_wrapper_1 .ginput_container_address .address_city,
+#gform_wrapper_1 .ginput_container_address .address_state,
+#gform_wrapper_1 .ginput_container_address .address_zip,
+#gform_wrapper_1 .ginput_container_address .address_country {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+}
+
+#gform_wrapper_1 .ginput_container_address span label {
+  
+  font-size: 11px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.1em !important;
+  text-transform: uppercase !important;
+  color: rgba(255, 255, 255, 0.35) !important;
+}
+
+/* Two columns for city/state/zip */
+#gform_wrapper_1 .ginput_container_address .ginput_left,
+#gform_wrapper_1 .ginput_container_address .ginput_right {
+  display: inline-flex !important;
+  flex-direction: column !important;
+  width: 48% !important;
+}
+
+/* ==============================================
+   RANGE / SLIDER (if used as custom field)
+   ============================================== */
+#gform_wrapper_1 input[type="range"] {
+  -webkit-appearance: none !important;
+  appearance: none !important;
+  width: 100% !important;
+  height: 4px !important;
+  background: rgba(255, 255, 255, 0.1) !important;
+  border-radius: 99px !important;
+  outline: none !important;
+  cursor: pointer !important;
+}
+
+#gform_wrapper_1 input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none !important;
+  width: 20px !important;
+  height: 20px !important;
+  background: #ff2d55 !important;
+  border-radius: 50% !important;
+  border: 3px solid #0d0f1e !important;
+  box-shadow: 0 0 10px rgba(255, 45, 85, 0.5) !important;
+  cursor: pointer !important;
+  transition: box-shadow 0.2s ease !important;
+}
+
+#gform_wrapper_1 input[type="range"]::-webkit-slider-thumb:hover {
+  box-shadow: 0 0 16px rgba(255, 45, 85, 0.7) !important;
+}
+
+/* ==============================================
+   LIKERT / TABLE FIELDS
+   ============================================== */
+#gform_wrapper_1 .gfield_likert table {
+  width: 100% !important;
+  border-collapse: collapse !important;
+  border-radius: 12px !important;
+  overflow: hidden !important;
+}
+
+#gform_wrapper_1 .gfield_likert th {
+  background: rgba(255, 45, 85, 0.08) !important;
+  color: rgba(255, 255, 255, 0.6) !important;
+  
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.08em !important;
+  text-transform: uppercase !important;
+  padding: 12px 14px !important;
+  text-align: center !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+}
+
+#gform_wrapper_1 .gfield_likert td {
+  padding: 12px 14px !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04) !important;
+  text-align: center !important;
+  color: rgba(255, 255, 255, 0.75) !important;
+  font-size: 14px !important;
+}
+
+#gform_wrapper_1 .gfield_likert tr:last-child td {
+  border-bottom: none !important;
+}
+
+#gform_wrapper_1 .gfield_likert tr:hover td {
+  background: rgba(255, 45, 85, 0.04) !important;
+}
+
+/* ==============================================
+   PAGE FOOTER (navigation buttons)
+   ============================================== */
 #gform_wrapper_1 .gform_page_footer,
 #gform_wrapper_1 .gform-page-footer {
   display: flex !important;
   align-items: center !important;
+  justify-content: center;
   gap: 12px !important;
-  margin-top: 36px !important;
-  padding-top: 28px !important;
-  border-top: 1px solid rgba(255, 255, 255, 0.06) !important;
+  margin-top: 40px !important;
   background: transparent !important;
 }
 
 /* ── Next / Submit button ── */
 #gform_wrapper_1 .gform_next_button,
 #gform_wrapper_1 .gform_button,
-#gform_wrapper_1 #gform_submit_button_1 {
-  font-family: 'Syne', sans-serif !important;
+#gform_wrapper_1 #gform_submit_button_1,
+#gform_wrapper_1 input[type="submit"] {
+  
   font-size: 14px !important;
   font-weight: 700 !important;
-  letter-spacing: 0.05em !important;
-  color: #ffffff !important;
-  background: #ff2d55 !important;
-  border: none !important;
-  border-radius: 50px !important;
-  padding: 0 32px !important;
-  height: 50px !important;
+  letter-spacing: 0.06em !important;
+   background-color: var(--color-primary);
+  border-color: var(--color-primary);
+  color: #ffffff;
+ border-radius:12px !important;
+  padding: 16px 36px !important;
   cursor: pointer !important;
-  box-shadow: 0 4px 20px rgba(255, 45, 85, 0.4) !important;
   transition:
     background 0.22s ease,
     box-shadow 0.22s ease,
     transform 0.22s ease !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 8px !important;
+  width: 300px;
 }
 
 #gform_wrapper_1 .gform_next_button:hover,
 #gform_wrapper_1 .gform_button:hover,
-#gform_wrapper_1 #gform_submit_button_1:hover {
-  background: #cc0033 !important;
-  box-shadow: 0 6px 28px rgba(255, 45, 85, 0.55) !important;
-  transform: translateY(-2px) !important;
+#gform_wrapper_1 #gform_submit_button_1:hover,
+#gform_wrapper_1 input[type="submit"]:hover {
+  background-color: var(--color-primary-hover);
+  border-color: var(--color-primary-hover);
+  transform: translateY(-2px);
+  color: #ffffff;
 }
 
 #gform_wrapper_1 .gform_next_button:active,
 #gform_wrapper_1 .gform_button:active,
-#gform_wrapper_1 #gform_submit_button_1:active {
+#gform_wrapper_1 #gform_submit_button_1:active,
+#gform_wrapper_1 input[type="submit"]:active {
   transform: translateY(0) !important;
-  box-shadow: 0 2px 10px rgba(255, 45, 85, 0.3) !important;
 }
 
 /* ── Previous button ── */
 #gform_wrapper_1 .gform_previous_button {
-  font-family: 'DM Sans', sans-serif !important;
+  
   font-size: 14px !important;
   font-weight: 500 !important;
-  color: rgba(255, 255, 255, 0.5) !important;
+  color: rgba(255, 255, 255, 0.45) !important;
   background: transparent !important;
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
-  border-radius: 50px !important;
-  padding: 0 24px !important;
-  height: 50px !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+ border-radius:12px !important;
+  padding: 16px 36px !important;
   cursor: pointer !important;
   transition:
     color 0.2s ease,
-    border-color 0.2s ease !important;
+    border-color 0.2s ease,
+    background 0.2s ease !important;
 }
 
 #gform_wrapper_1 .gform_previous_button:hover {
-  color: #ffffff !important;
-  border-color: rgba(255, 255, 255, 0.3) !important;
+  color: rgba(255, 255, 255, 0.85) !important;
+  border-color: rgba(255, 255, 255, 0.25) !important;
+  background: rgba(255, 255, 255, 0.04) !important;
 }
 
-/* ── Validation errors ── */
+/* ── Save progress / other secondary links ── */
+#gform_wrapper_1 .gform_save_link {
+  
+  font-size: 13px !important;
+  color: rgba(255, 255, 255, 0.35) !important;
+  text-decoration: none !important;
+  margin-left: auto !important;
+  transition: color 0.2s ease !important;
+}
+
+#gform_wrapper_1 .gform_save_link:hover {
+  color: rgba(255, 255, 255, 0.7) !important;
+}
+
+/* ==============================================
+   VALIDATION ERRORS
+   ============================================== */
 #gform_wrapper_1 .gform_validation_errors,
 #gform_wrapper_1 .validation_error {
-  background: rgba(255, 45, 85, 0.08) !important;
-  border: 1px solid rgba(255, 45, 85, 0.35) !important;
-  border-radius: 10px !important;
+  background: rgba(255, 45, 85, 0.07) !important;
+  border: 1px solid rgba(255, 45, 85, 0.3) !important;
+  border-radius: 12px !important;
   color: #ff6b82 !important;
-  padding: 14px 18px !important;
+  padding: 14px 20px !important;
   font-size: 14px !important;
-  margin-bottom: 20px !important;
-  font-family: 'DM Sans', sans-serif !important;
+  margin-bottom: 24px !important;
+  
+  line-height: 1.5 !important;
 }
 
 #gform_wrapper_1 .gfield_error .gfield_label {
   color: #ff6b82 !important;
 }
 
-/* ── Confirmation message ── */
+#gform_wrapper_1 .gfield_error input,
+#gform_wrapper_1 .gfield_error select,
+#gform_wrapper_1 .gfield_error textarea {
+  border-color: rgba(255, 45, 85, 0.5) !important;
+  box-shadow: 0 0 0 3px rgba(255, 45, 85, 0.1) !important;
+}
+
+#gform_wrapper_1 .gfield_description.validation_message {
+  color: #ff6b82 !important;
+  font-size: 13px !important;
+  margin-top: 8px !important;
+}
+
+/* ==============================================
+   CONFIRMATION MESSAGE
+   ============================================== */
 #gform_confirmation_wrapper_1 .gform_confirmation_message {
-  font-family: 'Syne', sans-serif !important;
-  font-size: 20px !important;
+  
+  font-size: 22px !important;
   font-weight: 700 !important;
   color: #ffffff !important;
   text-align: center !important;
-  padding: 40px 0 !important;
+  padding: 48px 0 !important;
+  line-height: 1.4 !important;
 }
 
-/* ── Responsive ── */
-@media (max-width: 640px) {
+/* ==============================================
+   SECTION HEADING (gsection)
+   ============================================== */
+#gform_wrapper_1 .gsection {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06) !important;
+  padding-bottom: 20px !important;
+  margin-bottom: 30px !important;
+}
+
+#gform_wrapper_1 .gsection_title {
+  
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.18em !important;
+  text-transform: uppercase !important;
+  color: #ff2d55 !important;
+  margin-bottom: 4px !important;
+}
+
+#gform_wrapper_1 .gsection_description {
+  font-size: 14px !important;
+  color: rgba(255, 255, 255, 0.4) !important;
+}
+
+/* ==============================================
+   CAPTCHA
+   ============================================== */
+#gform_wrapper_1 .gfield_recaptcha_container {
+  filter: invert(0.9) hue-rotate(180deg) !important;
+  border-radius: 8px !important;
+  overflow: hidden !important;
+}
+
+/* ==============================================
+   RESPONSIVE
+   ============================================== */
+@media (max-width: 768px) {
   #gform_wrapper_1 {
-    padding: 28px 20px !important;
-    margin: 20px 12px !important;
+    padding: 32px 22px !important;
+    margin: 16px !important;
     border-radius: 16px !important;
+    max-width: 100% !important;
   }
 
   #gform_wrapper_1 .gfield_label {
     font-size: 18px !important;
+  }
+
+  #gform_wrapper_1 .ginput_complex.ginput_container_name {
+    flex-direction: column !important;
   }
 
   #gform_wrapper_1 .gform_page_footer,
@@ -317,7 +948,39 @@
   }
 
   #gform_wrapper_1 .gform_next_button,
-  #gform_wrapper_1 .gform_button {
+  #gform_wrapper_1 .gform_button,
+  #gform_wrapper_1 input[type="submit"] {
     width: 100% !important;
+    justify-content: center !important;
   }
+
+  #gform_wrapper_1 .gform_previous_button {
+    width: 100% !important;
+    text-align: center !important;
+  }
+}
+
+@media (max-width: 480px) {
+  #gform_wrapper_1 {
+    padding: 24px 16px !important;
+    margin: 8px !important;
+  }
+
+  #gform_wrapper_1 .gfield_label {
+    font-size: 16px !important;
+  }
+
+  #gform_wrapper_1 .gchoice {
+    padding: 13px 16px !important;
+  }
+}
+
+.gform-theme--framework .gf_progressbar .percentbar_blue {
+    background-color: var(--color-primary) !important;
+     height: 8px !important;
+}
+.gform-theme--framework .gf_progressbar {
+    background-color:#6F6F6F10 !important;
+    border-radius: 100px !important;
+    height: 8px !important;
 }

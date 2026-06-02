@@ -20,6 +20,7 @@
  *   ?es_stripe=cancel                         — soft notice
  *   ?selected=1&pkg=Y                         — non-Stripe selection thank-you
  */
+ 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
 $user_id      = isset( $_GET['user_id'] ) ? (int) $_GET['user_id'] : 0;
@@ -36,22 +37,15 @@ $settings = ES_Helpers::settings();
 // Resolve shortcode atts
 $atts_default_cycle = isset( $sc_atts['default_cycle'] ) ? strtolower( $sc_atts['default_cycle'] ) : 'monthly';
 $atts_yearly_toggle = isset( $sc_atts['yearly_toggle'] ) ? strtolower( $sc_atts['yearly_toggle'] ) : '';
-// Decide whether to show the Monthly/Yearly switcher. Rule:
-//   • If the shortcode explicitly sets yearly_toggle="yes" or "no", honour it.
-//   • Otherwise show it automatically when a yearly discount is configured,
-//     or when the admin has ticked "Enable Yearly Billing" in settings.
-if ( $atts_yearly_toggle === 'yes' ) {
-    $show_toggle = true;
-} elseif ( $atts_yearly_toggle === 'no' ) {
-    $show_toggle = false;
-} else {
-    $auto_yearly_discount = (float) ( $settings['yearly_discount'] ?? 0 );
-    $show_toggle = ( ! empty( $settings['enable_yearly'] ) ) || ( $auto_yearly_discount > 0 );
-}
+// Package-discount toggle. Global discount settings are no longer used for
+// package purchases; the switch is shown only when at least one rendered
+// package has its own Discount % and Discount Months configured, unless the
+// shortcode explicitly forces yearly_toggle="yes" or "no".
+$show_toggle = ( $atts_yearly_toggle === 'yes' );
 if ( ! in_array( $atts_default_cycle, array( 'monthly', 'yearly' ), true ) ) $atts_default_cycle = 'monthly';
 
 $monthly_label_txt = ! empty( $sc_atts['monthly_label'] )  ? $sc_atts['monthly_label']  : 'Pay Monthly';
-$semester_label_t  = ! empty( $sc_atts['semester_label'] ) ? $sc_atts['semester_label'] : 'Pay per Semester';
+$semester_label_t  = ! empty( $sc_atts['semester_label'] ) ? $sc_atts['semester_label'] : 'Pay Yearly';
 $period_unit       = ! empty( $sc_atts['period_unit'] )    ? strtolower( $sc_atts['period_unit'] ) : 'month';
 
 $brand_name = ! empty( $sc_atts['brand_name'] ) ? $sc_atts['brand_name'] : ( $settings['site_name'] ?? get_bloginfo( 'name' ) );
@@ -64,6 +58,7 @@ $student_data = null;
 $packages     = array();
 $show_login   = false;       // when true, render a login prompt instead of cards
 $login_reason = '';          // user-facing explanation
+$login_mode   = '';          // 'guest' | 'wrong_account' | 'expired'
 $current_user_id = get_current_user_id();
 $is_personalised_link = false;  // true only for admin-issued ?user_id&token links with staged packages
 
@@ -84,15 +79,44 @@ if ( $stripe_status === 'success' && $stripe_session ) {
             <div class="es-thank-icon">✓</div>
             <h1>Payment Successful</h1>
             <p class="es-thank-sub">Thank you! Your enrollment is now active.</p>
-            <?php if ( $pkg && $row ) : ?>
+            <?php if ( $pkg && $row ) :
+                $row_months    = max( 1, (int) ( $row->months ?? ( $pkg->months ?? 1 ) ) );
+                $row_total     = (int) ( $row->total_sessions ?? ( $pkg->total_sessions ?? 0 ) );
+                $row_monthly   = (int) ( $row->monthly_session_limit ?? ( $pkg->monthly_session_limit ?? 0 ) );
+                $row_used      = (int) ( $row->used_sessions ?? 0 );
+                $row_remaining = max( 0, $row_total - $row_used );
+            ?>
                 <div class="es-thank-pkg">
                     <div class="es-thank-pkg-name"><?php echo esc_html( $pkg->package_name ); ?></div>
+                    <?php if ( ! empty( $pkg->sub_heading ) ) : ?>
+                        <div class="es-thank-pkg-sub" style="font-size:13px;color:#6b7280;margin-bottom:8px;"><?php echo esc_html( $pkg->sub_heading ); ?></div>
+                    <?php endif; ?>
                     <div class="es-thank-pkg-price">
                         <?php echo esc_html( ES_Helpers::format_price( $row->amount, $cur ) ); ?>
-                        <span>· <?php echo esc_html( ucfirst( $row->billing_cycle ) ); ?> (one-time)</span>
+                        <span>· <?php echo (int) $row_months; ?> month<?php echo $row_months > 1 ? 's' : ''; ?> · paid in full</span>
                     </div>
+
+                    <div class="es-thank-details" style="margin-top:18px;text-align:left;border-top:1px solid #e5e7eb;padding-top:16px;">
+                        <div class="es-thank-detail-row" style="display:flex;justify-content:space-between;padding:6px 0;font-size:14px;">
+                            <span style="color:#6b7280;">Package Duration</span>
+                            <strong style="color:#1e1e2e;"><?php echo (int) $row_months; ?> month<?php echo $row_months > 1 ? 's' : ''; ?></strong>
+                        </div>
+                        <div class="es-thank-detail-row" style="display:flex;justify-content:space-between;padding:6px 0;font-size:14px;">
+                            <span style="color:#6b7280;">Total Sessions</span>
+                            <strong style="color:#1e1e2e;"><?php echo (int) $row_total; ?></strong>
+                        </div>
+                        <div class="es-thank-detail-row" style="display:flex;justify-content:space-between;padding:6px 0;font-size:14px;">
+                            <span style="color:#6b7280;">Monthly Sessions</span>
+                            <strong style="color:#1e1e2e;"><?php echo (int) $row_monthly; ?> / month</strong>
+                        </div>
+                        <div class="es-thank-detail-row" style="display:flex;justify-content:space-between;padding:6px 0;font-size:14px;">
+                            <span style="color:#6b7280;">Remaining Sessions</span>
+                            <strong style="color:#10b981;"><?php echo (int) $row_remaining; ?></strong>
+                        </div>
+                    </div>
+
                     <?php if ( $row->valid_until ) : ?>
-                        <div class="es-thank-meta" style="margin-top:10px">
+                        <div class="es-thank-meta" style="margin-top:14px">
                             Active until <strong><?php echo esc_html( date_i18n( 'F j, Y', strtotime( $row->valid_until ) ) ); ?></strong>
                         </div>
                     <?php endif; ?>
@@ -155,31 +179,67 @@ if ( $is_selected && $selected_pkg ) {
 }
 
 /* ───────────────────────────────────────────────────────────────
- *  PACKAGE SELECTION MODE
+ *  PACKAGE DISPLAY MODE  (v3.9.6 — packages are PUBLIC)
  *
- *  Access rules (all enforced server-side):
- *    1. Visitor must be logged in. If not → render login prompt.
- *    2. If a personalised link is present (?user_id=X&token=Y):
- *         a. user_id MUST match the currently logged-in user.
- *         b. token MUST be valid for that user.
- *       → On success: $valid_link = true, $packages = staged-or-all.
- *       → On failure: render an error explaining the mismatch.
- *    3. If no token in URL but user is logged in:
- *         → treat as "self-serve": $valid_link = true with the logged-in
- *           user as $student_data, $packages = all active packages.
- *           (Any logged-in user can buy any active package.)
+ *  New behaviour requested by the client:
+ *    • The 3 packages are ALWAYS visible — even to logged-out visitors.
+ *      We no longer hide them behind a "Login Required" wall.
+ *    • Login is only enforced at BUY time: when a logged-out visitor
+ *      clicks "Select This Plan", the JS opens a login popup. Once they
+ *      log in (or sign up) they come back to this page and can pay.
+ *
+ *  Access rules:
+ *    1. Logged-OUT visitor:
+ *         → packages render normally. $valid_link = false (no payment
+ *           panel rendered server-side; JS shows a login popup on Buy).
+ *           $packages = all active packages.
+ *    2. Personalised link (?user_id=X&token=Y) for the logged-in user:
+ *         → staged packages + greeting + recommendation, same as before.
+ *    3. Logged-IN self-serve (no token in URL):
+ *         → any logged-in user can buy any active package.
  * ─────────────────────────────────────────────────────────────── */
+$login_popup_url = '';   // used by JS to send logged-out users to login
+$is_guest_view   = false; // true when a logged-out visitor is browsing
+$register_url    = '';
+$lostpw_url      = '';
+
 if ( ! is_user_logged_in() ) {
+
+
+    // PUBLIC view — per requirement, logged-out visitors must log in first and
+    // are NOT shown the package list. Build a login URL that returns them to
+    // THIS exact page after authenticating.
+    $current_url = ( is_ssl() ? 'https' : 'http' ) . '://'
+        . ( isset( $_SERVER['HTTP_HOST'] ) ? $_SERVER['HTTP_HOST'] : '' )
+        . ( isset( $_SERVER['REQUEST_URI'] ) ? $_SERVER['REQUEST_URI'] : '' );
+    $login_popup_url = wp_login_url( $current_url );
+    $is_guest_view   = true;
+
+    // Prefer the plugin's own register page if configured, else WP default.
+    $reg_page_id  = (int) ( $settings['register_page_id'] ?? 0 );
+    $register_url = $reg_page_id ? get_permalink( $reg_page_id ) : ( get_option( 'users_can_register' ) ? wp_registration_url() : '' );
+    $lostpw_url   = wp_lostpassword_url( $current_url );
+
+    // Show the login screen only — no packages for guests.
     $show_login   = true;
-    $login_reason = 'Please log in to view and purchase packages.';
+    $login_reason = 'Please log in to view your packages and continue.';
+    $login_mode   = 'guest';
+    $valid_link   = false;
+    $student_data = null;
+    $packages     = array();
+
 } elseif ( $user_id && $token ) {
     // Personalised link path
     if ( $user_id !== $current_user_id ) {
+        // The visitor IS logged in, just not as the link's owner. Don't ask them
+        // to log in again — show a clear "this package isn't for you" message.
         $show_login   = true;
-        $login_reason = 'This personalised link belongs to a different account. Please log in with that account.';
+        $login_mode   = 'wrong_account';
+        $login_reason = 'This package selection was prepared for a different account, so it isn’t available on your account. If you believe this is a mistake, please contact us and we’ll be happy to help.';
     } elseif ( ! ES_Packages::validate_token( $user_id, $token ) ) {
         $show_login   = true;
-        $login_reason = 'This link has expired or is invalid. Please contact us for a new one.';
+        $login_mode   = 'expired';
+        $login_reason = 'This package link has expired. Please contact us for an up-to-date link.';
     } else {
         $valid_link = true;
         $user = get_userdata( $user_id );
@@ -224,8 +284,64 @@ if ( ! is_user_logged_in() ) {
     $packages = ES_Packages::get_all( true );
 }
 
+// Course label shown on personalized purchase links. It is read from the
+// staged lead/payment flow so the purchase page clearly shows which course the
+// package belongs to.
+$selection_course_name = '';
+$selection_flow_type   = '1to1';
+if ( ! empty( $student_data['id'] ) ) {
+    $selection_flow_type = ES_Packages::get_staged_flow( (int) $student_data['id'] );
+    $latest_course_row = ES_Packages::get_latest_lead_outcome( (int) $student_data['id'] );
+    if ( $latest_course_row && ! empty( $latest_course_row->course_name ) ) {
+        $selection_course_name = $latest_course_row->course_name;
+    } elseif ( $latest_course_row && ! empty( $latest_course_row->group_id ) ) {
+        $selection_course_name = ES_Packages::course_names_str( ES_Packages::get_group_course_ids( (int) $latest_course_row->group_id ) );
+    } else {
+        $selection_course_name = ES_Packages::course_names_str( ES_Packages::get_student_course_ids( (int) $student_data['id'] ) );
+    }
+}
+
+// Recompute the discounted toggle now that the exact packages to render are known.
+$has_package_discount = false;
+if ( ! empty( $packages ) ) {
+    foreach ( $packages as $pkg_for_toggle ) {
+        if ( ! empty( $pkg_for_toggle->discount_percent ) && ! empty( $pkg_for_toggle->discount_months ) ) {
+            $has_package_discount = true;
+            break;
+        }
+    }
+}
+if ( $atts_yearly_toggle === 'no' ) {
+    $show_toggle = false;
+} elseif ( $atts_yearly_toggle !== 'yes' ) {
+    $show_toggle = $has_package_discount;
+}
+if ( ! $show_toggle && $atts_default_cycle === 'yearly' ) {
+    $atts_default_cycle = 'monthly';
+}
+
+/* Pull the logged-in user's saved billing details (used to pre-fill the
+ * Stripe address fields — required for INR/India card payments). */
+$billing_prefill = array( 'country' => '', 'phone' => '', 'line1' => '', 'city' => '', 'state' => '', 'postal' => '' );
+if ( is_user_logged_in() ) {
+    $cu = wp_get_current_user();
+    $billing_prefill['country'] = strtoupper( (string) get_user_meta( $cu->ID, 'es_country', true ) );
+    $billing_prefill['phone']   = (string) get_user_meta( $cu->ID, 'es_phone', true );
+    $billing_prefill['line1']   = (string) get_user_meta( $cu->ID, 'es_addr_line1', true );
+    $billing_prefill['city']    = (string) get_user_meta( $cu->ID, 'es_addr_city', true );
+    $billing_prefill['state']   = (string) get_user_meta( $cu->ID, 'es_addr_state', true );
+    $billing_prefill['postal']  = (string) get_user_meta( $cu->ID, 'es_addr_postal', true );
+}
+
 $stripe_ready    = class_exists( 'ES_Stripe' ) && ES_Stripe::is_enabled();
-$yearly_discount = (float) ( $settings['yearly_discount'] ?? 0 );
+$yearly_discount = 0; // Global discount intentionally ignored; package-level discounts are used per card.
+
+// Packages this user already owns an active (still-valid) plan for — used to
+// show a "Current Plan" state and disable the buy button so they can't
+// re-purchase the same package while it's active.
+$owned_active_ids = ( is_user_logged_in() && ! empty( $student_data['id'] ) )
+    ? ES_Packages::get_active_package_ids( (int) $student_data['id'], $selection_flow_type )
+    : array();
 
 // Admin-only diagnostic — only visible to people who can manage the plugin,
 // so end users never see it. Helps the operator understand why "Buy Now"
@@ -251,79 +367,63 @@ if ( ! $stripe_ready && current_user_can( 'manage_options' ) ) {
     }
 }
 
-$discount_label  = $yearly_discount > 0
-    ? ' (' . rtrim( rtrim( number_format( $yearly_discount, 1 ), '0' ), '.' ) . '% Discount)'
-    : '';
-
-$yearly_discount_int = (int) round( $yearly_discount );
+$discount_label  = $has_package_discount ? ' (discount available)' : '';
+$yearly_discount_int = 0;
 ?>
 
-<?php if ( $show_login ) :
-    // The visitor needs to log in (or log in as the right user) — render a
-    // prompt and stop rendering the rest of the page. We preserve the current
-    // URL (with user_id/token if present) as the post-login redirect_to so
-    // they end up back here after authenticating.
-    $current_url = ( is_ssl() ? 'https' : 'http' ) . '://'
-        . ( isset( $_SERVER['HTTP_HOST'] ) ? $_SERVER['HTTP_HOST'] : '' )
-        . ( isset( $_SERVER['REQUEST_URI'] ) ? $_SERVER['REQUEST_URI'] : '' );
-    $login_url = wp_login_url( $current_url );
-    $registration_open = (bool) get_option( 'users_can_register' );
-    ?>
-    <div class="es-pp-shell es-pp-login-shell">
-        <div class="es-pp-login-card">
-            <div class="es-pp-brand" style="justify-content:center;border:0;margin-bottom:18px">
-                <?php if ( $brand_logo ) : ?>
-                    <img src="<?php echo esc_url( $brand_logo ); ?>" alt="" class="es-pp-brand-logo" />
-                <?php else : ?>
-                    <span class="es-pp-brand-mark">◆</span>
-                <?php endif; ?>
-                <span class="es-pp-brand-name"><?php echo esc_html( $brand_name ); ?></span>
-            </div>
-            <div class="es-pp-login-icon">
-                <span class="dashicons dashicons-lock"></span>
-            </div>
-            <h1 class="es-pp-login-title">Login Required</h1>
-            <p class="es-pp-login-sub"><?php echo esc_html( $login_reason ); ?></p>
-            <a href="<?php echo esc_url( $login_url ); ?>" class="es-pp-login-btn">
-                Log in to continue
-            </a>
-            <?php if ( $registration_open ) : ?>
-                <p class="es-pp-login-meta">
-                    Don't have an account?
-                    <a href="<?php echo esc_url( wp_registration_url() ); ?>">Sign up</a>
-                </p>
-            <?php endif; ?>
-        </div>
-    </div>
-    <style>
-    .es-pp-login-shell{max-width:480px;margin:60px auto;padding:0 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
-    .es-pp-login-card{background:#fff;border-radius:16px;padding:36px 32px;text-align:center;box-shadow:0 10px 40px rgba(15,23,42,.08);border:1px solid #e5e7eb}
-    .es-pp-login-icon{width:60px;height:60px;border-radius:50%;background:#1e293b;color:#caa657;display:inline-flex;align-items:center;justify-content:center;margin-bottom:18px}
-    .es-pp-login-icon .dashicons{font-size:28px;width:28px;height:28px}
-    .es-pp-login-title{margin:0 0 10px;font-size:22px;font-weight:600;color:#1e293b}
-    .es-pp-login-sub{margin:0 0 22px;font-size:14px;color:#64748b;line-height:1.5}
-    .es-pp-login-btn{display:inline-block;background:#caa657;color:#1e293b;padding:12px 26px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px;transition:background .15s}
-    .es-pp-login-btn:hover{background:#b58e3e;color:#1e293b}
-    .es-pp-login-meta{margin:18px 0 0;font-size:13px;color:#94a3b8}
-    .es-pp-login-meta a{color:#caa657;text-decoration:none;font-weight:500}
-    .es-pp-login-meta a:hover{text-decoration:underline}
-    </style>
-    <?php return; // stop rendering the rest of the template
-endif; ?>
+<?php if ( $show_login ) : ?>
 
-<div class="es-pp-shell" data-default-cycle="<?php echo esc_attr( $atts_default_cycle ); ?>">
+    <?php if ( $login_mode === 'guest' ) : ?>
+
+        <div class="es-pp-login-shortcode-wrap">
+            <?php echo do_shortcode( '[eduschedule_auth]' ); ?>
+        </div>
+
+  
+
+    <?php else : ?>
+
+        <?php
+        $dash_id  = (int) ( $settings['dashboard_page_id'] ?? 0 );
+        $dash_url = $dash_id ? get_permalink( $dash_id ) : home_url( '/' );
+        ?>
+
+        <div class="es-pp-shell es-pp-login-shell">
+            <div class="es-pp-login-card">
+                
+                <div class="es-pp-login-icon">
+                    <span class="dashicons <?php echo $login_mode === 'wrong_account' ? 'dashicons-info-outline' : 'dashicons-lock'; ?>"></span>
+                </div>
+
+                <?php if ( $login_mode === 'wrong_account' ) : ?>
+                    <h1 class="es-pp-login-title">This package isn’t available on your account</h1>
+                    <p class="es-pp-login-sub"><?php echo esc_html( $login_reason ); ?></p>
+                    <a href="<?php echo esc_url( $dash_url ); ?>" class="btn btn-primary">Go to my dashboard</a>
+
+                <?php elseif ( $login_mode === 'expired' ) : ?>
+                    <h1 class="es-pp-login-title">This link has expired</h1>
+                    <p class="es-pp-login-sub"><?php echo esc_html( $login_reason ); ?></p>
+                    <a href="<?php echo esc_url( $dash_url ); ?>" class="btn btn-primary">Go to my dashboard</a>
+                <?php endif; ?>
+            </div>
+        </div>
+
+      
+    <?php endif; ?>
+
+    <?php return; // stop rendering the rest of the template ?>
+
+<?php endif; ?>
+
+<div class="es-pp-shell<?php echo ( $valid_link && $student_data ) ? ' has-pay-col' : ''; ?>" data-default-cycle="<?php echo esc_attr( $atts_default_cycle ); ?>" data-yearly-discount="<?php echo esc_attr( $yearly_discount_int ); ?>">
 
     <!-- ============ MAIN PANEL (LEFT) ============ -->
     <div class="es-pp-main">
 
         <!-- Brand bar -->
         <div class="es-pp-brand">
-            <?php if ( $brand_logo ) : ?>
-                <img src="<?php echo esc_url( $brand_logo ); ?>" alt="" class="es-pp-brand-logo" />
-            <?php else : ?>
                 <span class="es-pp-brand-mark">◆</span>
-            <?php endif; ?>
-            <span class="es-pp-brand-name"><?php echo esc_html( $brand_name ); ?></span>
+            <span class="es-pp-brand-name">Package Detail</span>
             <?php if ( $is_personalised_link && $student_data ) : ?>
                 <span class="es-pp-brand-sep">|</span>
                 <span class="es-pp-brand-sub">Decision Hub</span>
@@ -349,7 +449,7 @@ endif; ?>
         <?php if ( $is_personalised_link && $student_data ) : ?>
             <div class="es-pp-greeting">
                 <h1><?php echo esc_html( $student_data['name'] ); ?></h1>
-                <p>Personalized Plan Selection</p>
+                <p>Personalized Plan Selection<?php echo $selection_course_name ? ' · Course: ' . esc_html( $selection_course_name ) : ''; ?></p>
             </div>
         <?php else : ?>
             <div class="es-pp-greeting">
@@ -388,21 +488,70 @@ endif; ?>
             <div class="es-pp-grid">
                 <?php $i = 0; foreach ( $packages as $pkg ) : $i++;
                     $cur            = ! empty( $pkg->currency ) ? $pkg->currency : ( $settings['default_currency'] ?? 'INR' );
-                    $monthly_price  = (float) $pkg->price;
 
-                    // Yearly = monthly × 12 − global discount %
-                    $yearly_price   = round( ( $monthly_price * 12 ) * ( 1 - ( $yearly_discount / 100 ) ), 2 );
+                    // ── New monthly model ──
+                    //   monthly_price = charged per month
+                    //   months        = duration
+                    //   total         = monthly_price × months (stored in `price`)
+                    // Fall back gracefully for legacy packages where only `price`
+                    // (the old monthly figure) exists.
+                    $pkg_months    = max( 1, (int) ( $pkg->months ?? 1 ) );
+                    $monthly_price = (float) ( $pkg->monthly_price ?? 0 );
+                    if ( $monthly_price <= 0 ) {
+                        // Legacy: treat stored price as monthly, total = price (1 month)
+                        $monthly_price = (float) $pkg->price;
+                        $total_price   = ( $pkg_months > 1 ) ? round( $monthly_price * $pkg_months, 2 ) : (float) $pkg->price;
+                    } else {
+                        $total_price   = (float) $pkg->price; // already monthly × months
+                        if ( $total_price <= 0 ) {
+                            $total_price = round( $monthly_price * $pkg_months, 2 );
+                        }
+                    }
+
+                    $total_sessions = (int) ( $pkg->total_sessions ?? 0 );
+                    $monthly_limit  = (int) ( $pkg->monthly_session_limit ?? 0 );
+
+                    // Discounted ("yearly") cycle (v4.3). The discounted tab
+                    // bills the package's OWN duration at the monthly rate, then
+                    // subtracts a discount applied only to discount_months:
+                    //   total = (months × monthly) − (monthly × discount_months × discount% / 100)
+                    // The headline per-month shown on the discounted tab is the
+                    // effective rate = total ÷ months (kept consistent with total).
+                    $pkg_discount_percent = max( 0, min( 100, (float) ( $pkg->discount_percent ?? 0 ) ) );
+                    $pkg_discount_months  = $pkg->discount_months ? $pkg->discount_months : $pkg_months;
+                    $pkg_has_discount     = ( $pkg_discount_percent > 0 && $pkg_discount_months > 0 );
+
+                    $yearly_billed_months = $pkg_discount_months;
+                    $yearly_gross         = $monthly_price * $yearly_billed_months;
+                    $yearly_discount_amt  = $pkg_has_discount
+                        ? ( $monthly_price * $pkg_discount_months * $pkg_discount_percent / 100 )
+                        : 0;
+                    $yearly_total         = round( max( 0, $yearly_gross - $yearly_discount_amt ), 2 );
+                    // Effective per-month rate for the discounted tab headline.
+                    $yearly_price         = $yearly_billed_months > 0
+                        ? round( $yearly_total / $yearly_billed_months, 2 )
+                        : $monthly_price;
 
                     $monthly_money_label = ES_Helpers::format_price( $monthly_price, $cur );
                     $yearly_money_label  = ES_Helpers::format_price( $yearly_price,  $cur );
+                    $total_money_label   = ES_Helpers::format_price( $total_price,   $cur );
+                    $pkg_discount_int    = (int) round( $pkg_discount_percent );
 
                     $is_recommended = ( $is_personalised_link && $recommended_idx > 0 && $i === $recommended_idx );
+                    $is_owned       = in_array( (int) $pkg->id, $owned_active_ids, true );
                 ?>
-                    <div class="es-pp-card <?php echo $is_recommended ? 'is-featured' : ''; ?>"
+                    <div class="es-pp-card <?php echo $is_recommended ? 'is-featured' : ''; ?><?php echo $is_owned ? ' is-owned' : ''; ?>"
                          data-package-id="<?php echo (int) $pkg->id; ?>"
                          data-currency="<?php echo esc_attr( $cur ); ?>"
                          data-monthly="<?php echo esc_attr( $monthly_price ); ?>"
                          data-yearly="<?php echo esc_attr( $yearly_price ); ?>"
+                         data-months="<?php echo (int) $pkg_months; ?>"
+                         data-total="<?php echo esc_attr( $total_price ); ?>"
+                         data-total-label="<?php echo esc_attr( $total_money_label ); ?>"
+                         data-total-sessions="<?php echo (int) $total_sessions; ?>"
+                         data-monthly-limit="<?php echo (int) $monthly_limit; ?>"
+                         data-discount-percent="<?php echo esc_attr( $pkg_discount_percent ); ?>"
+                         data-discount-months="<?php echo (int) $pkg_discount_months; ?>"
                          data-monthly-label="<?php echo esc_attr( $monthly_money_label ); ?>"
                          data-yearly-label="<?php echo esc_attr( $yearly_money_label ); ?>"
                          data-package-name="<?php echo esc_attr( $pkg->package_name ); ?>">
@@ -420,11 +569,14 @@ endif; ?>
                                 <svg width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 4 L20 16 L10 38 C8 42 11 44 14 44 L34 44 C37 44 40 42 38 38 L28 16 L28 4 Z"/><path d="M20 4 L28 4"/></svg>
                             <?php else : ?>
                                 <!-- Smaller flask -->
-                                <svg width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 6 L21 18 L13 38 C12 41 14 43 17 43 L31 43 C34 43 36 41 35 38 L27 18 L27 6 Z"/><path d="M21 6 L27 6"/></svg>
+                                <svg width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M24 8 L4 18 L24 28 L44 18 Z"/><path d="M12 22 L12 32 C12 32 17 36 24 36 C31 36 36 32 36 32 L36 22"/><path d="M44 18 L44 30"/></svg>
                             <?php endif; ?>
                         </div>
 
                         <h3 class="es-pp-card-name"><?php echo esc_html( $pkg->package_name ); ?></h3>
+                        <?php if ( $selection_course_name ) : ?>
+                            <div class="es-pp-course-chip" >Course: <?php echo esc_html( $selection_course_name ); ?></div>
+                        <?php endif; ?>
                         <?php if ( ! empty( $pkg->sub_heading ) ) : ?>
                             <p class="es-pp-card-sub"><?php echo esc_html( $pkg->sub_heading ); ?></p>
                         <?php endif; ?>
@@ -445,23 +597,70 @@ endif; ?>
 
                         <div class="es-pp-card-price">
                             <span class="es-pp-amount-monthly" <?php echo $atts_default_cycle === 'yearly' ? 'style="display:none"' : ''; ?>>
-                                <?php echo esc_html( $monthly_money_label ); ?><span class="es-pp-period"> / <?php echo esc_html( $period_unit ); ?></span>
+                                <?php echo esc_html( $monthly_money_label ); ?><span class="es-pp-period"> / month</span>
                             </span>
                             <span class="es-pp-amount-yearly" <?php echo $atts_default_cycle === 'monthly' ? 'style="display:none"' : ''; ?>>
-                                <?php echo esc_html( $yearly_money_label ); ?><span class="es-pp-period"> / <?php echo esc_html( ! empty( $sc_atts['period_unit_yearly'] ) ? $sc_atts['period_unit_yearly'] : 'year' ); ?></span>
-                                <?php if ( $yearly_discount_int > 0 ) : ?>
-                                    <span class="es-pp-save-badge">Save <?php echo (int) $yearly_discount_int; ?>%</span>
+                                <?php if ( $pkg_has_discount ) : ?>
+                                    <span class="es-pp-old-price"><?php echo esc_html( $monthly_money_label ); ?></span>
+                                <?php endif; ?>
+                                <?php echo esc_html( $yearly_money_label ); ?><span class="es-pp-period"> / month</span>
+                                <?php if ( $pkg_has_discount ) : ?>
+                                    <span class="es-pp-save-badge">Save <?php echo (int) $pkg_discount_int; ?>% / <?php echo (int) $pkg_discount_months; ?> mo</span>
                                 <?php endif; ?>
                             </span>
                         </div>
 
-                        <?php if ( $stripe_ready ) : ?>
+                        <!-- Duration + total payable breakdown -->
+                        <?php
+                        // When the page defaults to the discounted cycle, show the
+                        // discount-months duration up front (matches the JS toggle,
+                        // which swaps Duration to discount_months when ON).
+                        $bd_init_months = ( $atts_default_cycle === 'yearly' && $pkg_has_discount )
+                            ? $pkg_discount_months
+                            : $pkg_months;
+                        ?>
+                        <div class="es-pp-card-breakdown" style="font-size:13px;line-height:1.7;margin:-6px 0 12px;color:inherit;opacity:.85;">
+                            <div class="es-pp-bd-row" style="display:flex;justify-content:space-between;gap:10px;">
+                                <span>Duration</span>
+                                <strong class="es-pp-bd-duration"><?php echo (int) $bd_init_months; ?> month<?php echo $bd_init_months > 1 ? 's' : ''; ?></strong>
+                            </div>
+                            <?php if ( $total_sessions > 0 ) : ?>
+                                <div class="es-pp-bd-row" style="display:flex;justify-content:space-between;gap:10px;">
+                                    <span>Sessions</span>
+                                    <strong><?php echo (int) $total_sessions; ?><?php if ( $monthly_limit > 0 ) : ?> <small style="opacity:.75">(<?php echo (int) $monthly_limit; ?> session/mo)</small><?php endif; ?></strong>
+                                </div>
+                            <?php endif; ?>
+                            <div class="es-pp-bd-row es-pp-bd-total" style="display:flex;justify-content:space-between;gap:10px;font-size:15px;margin-top:4px;padding-top:6px;border-top:1px solid rgba(128,128,128,.2);">
+                                <span>Total payable</span>
+                                <strong class="es-pp-bd-total-amount"><?php echo esc_html( $total_money_label ); ?></strong>
+                            </div>
+                        </div>
+
+                        <?php
+                        // v3.9.6 — The "Select This Plan" button now shows for
+                        // EVERYONE. For logged-out visitors it carries a
+                        // data-login-url so the JS can pop the login flow.
+                        // For logged-in users it carries the real user/token so
+                        // the inline Stripe payment panel opens.
+                        $is_guest = ! is_user_logged_in();
+                        ?>
+                        <?php if ( $is_owned ) : ?>
+                            <button type="button" class="es-pp-select-btn es-pp-owned-btn" disabled aria-disabled="true">
+                                <span class="dashicons dashicons-yes" style="font-size:16px;width:16px;height:16px;vertical-align:-2px"></span>
+                                Current Plan
+                            </button>
+                        <?php elseif ( $stripe_ready || $is_guest ) : ?>
                             <button type="button" class="es-pp-select-btn"
                                     data-package-id="<?php echo (int) $pkg->id; ?>"
-                                    data-user-id="<?php echo (int) $student_data['id']; ?>"
-                                    data-token="<?php echo esc_attr( $token ); ?>"
-                                    data-name="<?php echo esc_attr( $student_data['name'] ); ?>"
-                                    data-email="<?php echo esc_attr( $student_data['email'] ); ?>">
+                                    <?php if ( $is_guest ) : ?>
+                                        data-guest="1"
+                                        data-login-url="<?php echo esc_url( $login_popup_url ); ?>"
+                                    <?php else : ?>
+                                        data-user-id="<?php echo (int) $student_data['id']; ?>"
+                                        data-token="<?php echo esc_attr( $token ); ?>"
+                                        data-name="<?php echo esc_attr( $student_data['name'] ); ?>"
+                                        data-email="<?php echo esc_attr( $student_data['email'] ); ?>"
+                                    <?php endif; ?>>
                                 Select This Plan
                             </button>
                         <?php else : ?>
@@ -480,12 +679,7 @@ endif; ?>
             <button type="button" class="es-pp-pay-close" id="es-pp-pay-close" aria-label="Close payment panel">×</button>
 
             <div class="es-pp-pay-brand">
-                <?php if ( $brand_logo ) : ?>
-                    <img src="<?php echo esc_url( $brand_logo ); ?>" alt="" />
-                <?php else : ?>
-                    <div class="es-pp-pay-brand-mark">◆</div>
-                <?php endif; ?>
-                <div class="es-pp-pay-brand-name"><?php echo esc_html( $brand_name ); ?></div>
+                <img src="/wp-content/themes/hello-elementor/assets/images/iv-logo.svg" alt="IVy" />
                 <div class="es-pp-pay-brand-sub">Personalized Plan</div>
             </div>
 
@@ -509,30 +703,91 @@ endif; ?>
                     <input type="email" id="es-pp-email" placeholder="Email" value="<?php echo esc_attr( $student_data['email'] ); ?>" required />
                 </div>
 
+                <!-- ─── CARD DETAILS — split layout ───
+                     Row 1: full-width Card Number
+                     Row 2: Expiry + CVC side by side
+                     (Stripe individual Elements mount into these.) -->
                 <div class="es-pp-pay-field">
-                    <label>Payment Method</label>
-                    <div class="es-pp-pay-method">
-                        <span class="dashicons dashicons-money-alt"></span>
-                        <span>Credit Card</span>
-                        <span class="es-pp-pay-method-caret">▾</span>
+                    <label for="es-pp-card-number">Card Number</label>
+                    <div id="es-pp-card-number" class="es-pp-card-element es-pp-card-row-full"></div>
+                </div>
+
+                <div class="es-pp-card-row-split">
+                    <div class="es-pp-pay-field">
+                        <label for="es-pp-card-expiry">Expiry</label>
+                        <div id="es-pp-card-expiry" class="es-pp-card-element"></div>
+                    </div>
+                    <div class="es-pp-pay-field">
+                        <label for="es-pp-card-cvc">CVC</label>
+                        <div id="es-pp-card-cvc" class="es-pp-card-element"></div>
+                    </div>
+                </div>
+                <div id="es-pp-card-errors" class="es-pp-card-errors" role="alert"></div>
+
+                <!-- ─── BILLING ADDRESS ───
+                     Indian regulations (RBI) require a billing address +
+                     country on every card payment. We pre-fill from the
+                     logged-in user's saved profile where available. -->
+                <div class="es-pp-pay-divider">Billing Address</div>
+
+                <div class="es-pp-pay-field">
+                    <label for="es-pp-addr-line1">Address</label>
+                    <input type="text" id="es-pp-addr-line1" placeholder="Street address" value="<?php echo esc_attr( $billing_prefill['line1'] ); ?>" autocomplete="address-line1" required />
+                </div>
+
+                <div class="es-pp-card-row-split">
+                    <div class="es-pp-pay-field">
+                        <label for="es-pp-addr-city">City</label>
+                        <input type="text" id="es-pp-addr-city" placeholder="City" value="<?php echo esc_attr( $billing_prefill['city'] ); ?>" autocomplete="address-level2" required />
+                    </div>
+                    <div class="es-pp-pay-field">
+                        <label for="es-pp-addr-state">State</label>
+                        <input type="text" id="es-pp-addr-state" placeholder="State" value="<?php echo esc_attr( $billing_prefill['state'] ); ?>" autocomplete="address-level1" />
                     </div>
                 </div>
 
-                <div class="es-pp-pay-field">
-                    <label for="es-pp-card-element">Card Details</label>
-                    <!-- Stripe Card Element mounts here -->
-                    <div id="es-pp-card-element" class="es-pp-card-element"></div>
-                    <div id="es-pp-card-errors" class="es-pp-card-errors" role="alert"></div>
+                <div class="es-pp-card-row-split">
+                    <div class="es-pp-pay-field">
+                        <label for="es-pp-addr-postal">Postal Code</label>
+                        <input type="text" id="es-pp-addr-postal" placeholder="PIN / ZIP" value="<?php echo esc_attr( $billing_prefill['postal'] ); ?>" autocomplete="postal-code" required />
+                    </div>
+                    <div class="es-pp-pay-field">
+                        <label for="es-pp-addr-country">Country</label>
+                        <select id="es-pp-addr-country" autocomplete="country" required>
+                            <?php
+                            $country_list = ES_Helpers::countries();
+                            $sel_country  = $billing_prefill['country'] ?: 'IN';
+                            foreach ( $country_list as $code => $info ) {
+                                printf(
+                                    '<option value="%s"%s>%s</option>',
+                                    esc_attr( $code ),
+                                    selected( $sel_country, $code, false ),
+                                    esc_html( $info['name'] )
+                                );
+                            }
+                            ?>
+                        </select>
+                    </div>
                 </div>
 
                 <div class="es-pp-pay-summary">
                     <div class="es-pp-pay-summary-label">Plan</div>
                     <div class="es-pp-pay-summary-value" id="es-pp-summary-plan">—</div>
-                    <div class="es-pp-pay-summary-label">Total</div>
+
+                    <div class="es-pp-pay-summary-label">Monthly Price</div>
+                    <div class="es-pp-pay-summary-value" id="es-pp-summary-monthly">—</div>
+
+                    <div class="es-pp-pay-summary-label">Duration</div>
+                    <div class="es-pp-pay-summary-value" id="es-pp-summary-months">—</div>
+
+                    <div class="es-pp-pay-summary-label">Sessions</div>
+                    <div class="es-pp-pay-summary-value" id="es-pp-summary-sessions">—</div>
+
+                    <div class="es-pp-pay-summary-label">Total Payable</div>
                     <div class="es-pp-pay-summary-amount" id="es-pp-summary-amount">—</div>
                 </div>
 
-                <button type="submit" class="es-pp-pay-submit" id="es-pp-pay-submit">
+                <button type="submit" class="btn btn-primary btn-full" id="es-pp-pay-submit">
                     <span class="es-pp-pay-submit-text">Activate Plan</span>
                 </button>
 
@@ -540,7 +795,7 @@ endif; ?>
                     <span class="es-pp-mark">VISA</span>
                     <span class="es-pp-mark">Mastercard</span>
                     <span class="es-pp-mark">Amex</span>
-                    <span class="es-pp-mark">UPI</span>
+                    <span class="es-pp-mark">RuPay</span>
                 </div>
             </form>
         </aside>
@@ -548,188 +803,64 @@ endif; ?>
     <?php endif; ?>
 </div>
 
-<style>
-/* ─── Shell ─── */
-.es-pp-shell{position:relative;max-width:1180px;margin:24px auto;padding:0 20px;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif}
-.es-pp-main{background:#fff;border-radius:14px;padding:32px 36px 40px;border:1px solid #eef0f3;box-shadow:0 1px 2px rgba(0,0,0,0.02)}
+<?php if ( $is_guest_view ) : ?>
+    <!-- ============ LOGIN MODAL (in-page, same window) ============
+         Shown when a logged-out visitor clicks "Select This Plan".
+         Reuses #es-login-form so the existing AJAX handler in frontend.js
+         logs them in without leaving the page. -->
+    <div class="es-login-modal" id="es-login-modal" aria-hidden="true">
+        <div class="es-login-modal-overlay" id="es-login-modal-overlay"></div>
+        <div class="es-login-modal-card" role="dialog" aria-modal="true" aria-labelledby="es-login-modal-title">
+            <button type="button" class="es-login-modal-close" id="es-login-modal-close" aria-label="Close">×</button>
 
-/* Brand bar */
-.es-pp-brand{display:flex;align-items:center;gap:10px;padding-bottom:18px;margin-bottom:18px;border-bottom:1px solid #eef0f3;color:#1e293b;font-size:15px}
-.es-pp-brand-logo{height:28px;width:auto}
-.es-pp-brand-mark{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;color:#1e3a8a}
-.es-pp-brand-name{font-weight:600}
-.es-pp-brand-sep{color:#cbd5e1}
-.es-pp-brand-sub{color:#64748b}
+            <div class="es-login-modal-head">
+                <?php if ( $brand_logo ) : ?>
+                    <img src="<?php echo esc_url( $brand_logo ); ?>" alt="" class="es-login-modal-logo" />
+                <?php else : ?>
+                    <span class="es-login-modal-mark">◆</span>
+                <?php endif; ?>
+                <h2 class="es-login-modal-title" id="es-login-modal-title">Log in to continue</h2>
+                <p class="es-login-modal-sub">Sign in to select your plan and complete your enrollment.</p>
+            </div>
 
-/* Greeting */
-.es-pp-greeting{text-align:center;margin:6px 0 18px}
-.es-pp-greeting h1{font-size:26px;font-weight:700;color:#1e293b;margin:0 0 4px;letter-spacing:.2px}
-.es-pp-greeting p{font-size:14px;color:#64748b;margin:0}
+            <form id="es-login-form" class="es-login-modal-form" autocomplete="on" novalidate>
+                <input type="hidden" name="es_login_nonce_field" value="<?php echo esc_attr( wp_create_nonce( 'es_login_nonce' ) ); ?>" />
+                <input type="hidden" name="es_login_reload" value="1" />
 
-/* Recommendation */
-.es-pp-reco{background:#fff8e6;border:1px solid #f5d56b;border-radius:10px;padding:12px 16px;margin:14px 0 22px}
-.es-pp-reco-head{font-size:14px;font-weight:600;color:#92651e;margin-bottom:4px}
-.es-pp-reco-spark{margin-right:6px}
-.es-pp-reco-body{font-size:13px;color:#5c4514;line-height:1.5}
+                <div class="es-login-modal-field">
+                    <label>Email Address</label>
+                    <input type="email" name="email" required placeholder="you@example.com" autocomplete="username" />
+                </div>
 
-/* Notice */
-.es-pkg-notice{padding:10px 14px;border-radius:8px;margin:0 0 16px;font-size:13px}
-.es-pkg-notice-warn{background:#fef3c7;border:1px solid #fde68a;color:#92400e}
+                <div class="es-login-modal-field">
+                    <label>Password</label>
+                    <div class="es-login-modal-pw">
+                        <input type="password" name="password" required placeholder="••••••••" autocomplete="current-password" />
+                        <button type="button" class="es-fe-eye" aria-label="Toggle password"><span class="dashicons dashicons-visibility"></span></button>
+                    </div>
+                </div>
 
-/* Grid */
-.es-pp-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:18px;margin-top:8px}
-.es-pp-card{position:relative;background:#fff;border:1px solid #e5e7eb;border-radius:12px;padding:24px 18px 20px;display:flex;flex-direction:column;align-items:center;text-align:center;transition:all .2s}
-.es-pp-card:hover{border-color:#cbd5e1;box-shadow:0 4px 10px rgba(0,0,0,.06)}
-.es-pp-card.is-featured{background:#1e293b;color:#fff;border-color:#1e293b;transform:translateY(-4px)}
-.es-pp-card.is-featured .es-pp-card-name,
-.es-pp-card.is-featured .es-pp-card-price,
-.es-pp-card.is-featured .es-pp-card-icon{color:#fff}
-.es-pp-card.is-featured .es-pp-card-sub,
-.es-pp-card.is-featured .es-pp-card-features li{color:#cbd5e1}
+                <div class="es-login-modal-row">
+                    <label class="es-login-modal-remember">
+                        <input type="checkbox" name="remember" value="1" /> Remember me
+                    </label>
+                    <?php if ( $lostpw_url ) : ?>
+                        <a href="<?php echo esc_url( $lostpw_url ); ?>" class="es-login-modal-forgot">Forgot password?</a>
+                    <?php endif; ?>
+                </div>
 
-.es-pp-ribbon{position:absolute;top:14px;right:-6px;background:#caa657;color:#fff;font-size:10px;font-weight:700;padding:5px 14px;border-radius:3px;letter-spacing:.5px;transform:rotate(0deg);box-shadow:0 1px 4px rgba(0,0,0,0.2)}
-.es-pp-ribbon::after{content:'';position:absolute;top:100%;right:0;border:3px solid transparent;border-top-color:#8a6d36;border-right-color:#8a6d36}
+                <button type="submit" class="es-login-modal-submit es-fe-btn es-fe-btn-primary">Log in</button>
 
-.es-pp-card-icon{color:#94a3b8;margin-bottom:10px}
-.es-pp-card.is-featured .es-pp-card-icon{color:#caa657}
-.es-pp-card-name{font-size:15px;font-weight:600;color:#1e293b;margin:6px 0 4px;line-height:1.35}
-.es-pp-card-sub{font-size:12px;color:#64748b;margin:0 0 12px}
-.es-pp-card-features{list-style:none;padding:0;margin:8px 0 14px;font-size:13px;color:#475569;line-height:1.8}
-.es-pp-card-features li{padding:0}
-.es-pp-card-price{font-size:22px;font-weight:700;color:#1e293b;margin:6px 0 14px}
-.es-pp-period{font-size:13px;font-weight:400;color:#94a3b8}
-.es-pp-card.is-featured .es-pp-period{color:#cbd5e1}
+                <div class="es-fe-msg es-login-modal-msg" id="es-login-msg" style="display:none"></div>
+            </form>
 
-.es-pp-select-btn,.es-pkg-contact-btn{appearance:none;background:#1e293b;color:#fff;border:0;width:100%;padding:11px 14px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;transition:all .2s;letter-spacing:.2px}
-.es-pp-select-btn:hover,.es-pkg-contact-btn:hover{background:#0f172a}
-.es-pp-card.is-featured .es-pp-select-btn{background:#caa657;color:#1e293b}
-.es-pp-card.is-featured .es-pp-select-btn:hover{background:#b58e3e}
-.es-pp-select-btn:disabled{opacity:.7;cursor:wait}
+            <?php if ( $register_url ) : ?>
+                <div class="es-login-modal-foot">
+                    Don't have an account?
+                    <a href="<?php echo esc_url( $register_url ); ?>">Sign up</a>
+                </div>
+            <?php endif; ?>
+        </div>
+    </div>
+<?php endif; ?>
 
-/* Cycle toggle */
-.es-pp-toggle-wrap{display:flex;align-items:center;justify-content:center;gap:14px;margin:28px auto 6px;font-size:13px;color:#475569}
-.es-pp-toggle-wrap-top{
-    margin:8px auto 22px;
-    background:#f8fafc;
-    border:1px solid #e5e7eb;
-    border-radius:999px;
-    padding:8px 18px;
-    width:fit-content;
-}
-.es-pp-toggle-label{cursor:pointer;user-select:none;transition:color .15s}
-.es-pp-toggle-label.is-active{color:#1e293b;font-weight:600}
-.es-pp-switch{appearance:none;background:#caa657;border:0;width:44px;height:24px;border-radius:999px;position:relative;cursor:pointer;padding:0;transition:background .2s}
-.es-pp-switch-thumb{position:absolute;top:2px;left:2px;width:20px;height:20px;background:#fff;border-radius:50%;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
-.es-pp-switch.is-yearly .es-pp-switch-thumb{transform:translateX(20px)}
-
-.es-pkg-empty{text-align:center;padding:60px 20px;color:#64748b}
-
-/* ─── Payment Panel (right slide-in) ─── */
-.es-pp-pay-panel{
-    position:fixed;top:0;right:0;width:380px;max-width:100%;height:100vh;
-    background:#162439;color:#e2e8f0;padding:28px 26px;
-    overflow-y:auto;z-index:99998;
-    transform:translateX(105%);transition:transform .35s cubic-bezier(.4,0,.2,1);
-    box-shadow:-8px 0 32px rgba(0,0,0,.25);
-    font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
-}
-.es-pp-pay-panel.is-open{transform:translateX(0)}
-.es-pp-overlay{
-    position:fixed;inset:0;background:rgba(15,23,42,0.55);
-    opacity:0;pointer-events:none;transition:opacity .35s;z-index:99997;
-}
-.es-pp-overlay.is-open{opacity:1;pointer-events:auto}
-
-.es-pp-pay-close{
-    position:absolute;top:14px;right:14px;width:32px;height:32px;border:0;background:transparent;
-    color:#cbd5e1;font-size:28px;line-height:1;cursor:pointer;border-radius:50%;
-}
-.es-pp-pay-close:hover{background:rgba(255,255,255,.08);color:#fff}
-
-.es-pp-pay-brand{text-align:center;padding:14px 0 18px;border-bottom:1px solid rgba(255,255,255,.08);margin-bottom:18px}
-.es-pp-pay-brand img{max-height:48px}
-.es-pp-pay-brand-mark{font-size:32px;color:#caa657}
-.es-pp-pay-brand-name{font-size:15px;font-weight:600;color:#fff;margin-top:6px}
-.es-pp-pay-brand-sub{font-size:12px;color:#94a3b8;margin-top:2px}
-
-.es-pp-pay-secure{
-    display:flex;align-items:center;justify-content:center;gap:8px;
-    background:rgba(255,255,255,.06);border-radius:8px;padding:10px;
-    font-size:13px;color:#cbd5e1;margin-bottom:18px;
-}
-.es-pp-pay-secure .dashicons{font-size:16px;width:16px;height:16px}
-
-.es-pp-pay-field{margin-bottom:14px}
-.es-pp-pay-field label{display:block;font-size:12px;color:#94a3b8;margin-bottom:6px;font-weight:500}
-.es-pp-pay-field input[type=text],
-.es-pp-pay-field input[type=email]{
-    width:100%;padding:10px 12px;background:rgba(255,255,255,.06);
-    border:1px solid rgba(255,255,255,.1);border-radius:8px;color:#fff;font-size:14px;
-    box-sizing:border-box;
-}
-.es-pp-pay-field input:focus{outline:none;border-color:#caa657;background:rgba(255,255,255,.09)}
-.es-pp-pay-field input::placeholder{color:#64748b}
-
-.es-pp-pay-method{
-    display:flex;align-items:center;gap:8px;
-    padding:10px 12px;background:rgba(255,255,255,.06);
-    border:1px solid rgba(255,255,255,.1);border-radius:8px;font-size:14px;color:#fff;
-}
-.es-pp-pay-method .dashicons{font-size:18px;width:18px;height:18px;color:#cbd5e1}
-.es-pp-pay-method-caret{margin-left:auto;color:#94a3b8}
-
-.es-pp-card-element{
-    padding:12px;background:rgba(255,255,255,.92);border:1px solid rgba(255,255,255,.1);
-    border-radius:8px;min-height:42px;
-}
-.es-pp-card-errors{color:#fca5a5;font-size:12px;margin-top:6px;min-height:16px}
-
-.es-pp-pay-summary{
-    background:rgba(255,255,255,.04);border-radius:8px;padding:12px 14px;margin:8px 0 14px;
-    display:grid;grid-template-columns:1fr auto;row-gap:6px;font-size:13px;
-}
-
-.es-pp-pay-summary-label{color:#94a3b8}
-.es-pp-pay-summary-value{color:#fff;text-align:right;font-weight:500}
-.es-pp-pay-summary-amount{color:#caa657;font-weight:700;font-size:15px;text-align:right}
-
-.es-pp-pay-submit{
-    width:100%;padding:13px;background:#caa657;color:#1e293b;
-    border:0;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;letter-spacing:.3px;
-    transition:all .2s;
-}
-.es-pp-pay-submit:hover:not(:disabled){background:#b58e3e}
-.es-pp-pay-submit:disabled{opacity:.65;cursor:wait}
-
-.es-pp-pay-marks{display:flex;gap:6px;justify-content:center;margin-top:14px;flex-wrap:wrap}
-.es-pp-mark{
-    background:rgba(255,255,255,.08);color:#cbd5e1;
-    font-size:10px;font-weight:600;padding:4px 8px;border-radius:4px;letter-spacing:.5px;
-}
-
-/* ─── "Save X%" discount badge on yearly price ─── */
-.es-pp-save-badge{
-    display:inline-block;
-    background:#10b981;
-    color:#fff;
-    font-size:11px;
-    font-weight:700;
-    padding:3px 8px;
-    border-radius:10px;
-    margin-left:8px;
-    vertical-align:middle;
-    letter-spacing:.3px;
-    text-transform:uppercase;
-}
-.es-pp-card.is-featured .es-pp-save-badge{
-    background:#caa657;
-    color:#1e293b;
-}
-
-/* Mobile */
-@media (max-width:640px){
-    .es-pp-main{padding:22px 18px 28px}
-    .es-pp-pay-panel{width:100%;max-width:none}
-    .es-pp-greeting h1{font-size:22px}
-}
-</style>

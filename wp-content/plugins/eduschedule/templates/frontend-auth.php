@@ -33,9 +33,15 @@ $default_view = ( isset( $atts['default'] ) && $atts['default'] === 'register' &
                 <label class="es-fe-label">PASSWORD</label>
                 <div class="es-fe-pw-wrap">
                     <input type="password" name="password" required placeholder="••••••••" autocomplete="current-password" />
-                    <button type="button" class="es-fe-eye" aria-label="Toggle password"><span class="dashicons dashicons-visibility"></span></button>
+                    <button type="button" class="es-fe-eye es-fe-btn-link btn-link" aria-label="Toggle password"><span class="dashicons dashicons-visibility"></span></button>
                 </div>
-                <a href="<?php echo esc_url( wp_lostpassword_url() ); ?>" class="es-fe-forgot">Forgot password?</a>
+                <?php
+                // Forgot password → reload THIS page with the reset flag. The
+                // auth shortcode on this page renders the custom reset view.
+                $es_self_url   = remove_query_arg( array( 'es_action', 'key', 'login' ) );
+                $es_forgot_url = add_query_arg( 'es_action', 'lostpassword', $es_self_url );
+                ?>
+                <a href="<?php echo esc_url( $es_forgot_url ); ?>" class="es-fe-forgot">Forgot password?</a>
             </div>
 
             <label class="es-fe-remember">
@@ -100,7 +106,15 @@ $default_view = ( isset( $atts['default'] ) && $atts['default'] === 'register' &
                 <label class="es-fe-label">PASSWORD</label>
                 <div class="es-fe-pw-wrap">
                     <input type="password" name="password" required minlength="8" placeholder="At least 8 characters" autocomplete="new-password" />
-                    <button type="button" class="es-fe-eye" aria-label="Toggle password"><span class="dashicons dashicons-visibility"></span></button>
+                    <button type="button" class="es-fe-eye es-fe-btn-link btn-link" aria-label="Toggle password"><span class="dashicons dashicons-visibility"></span></button>
+                </div>
+            </div>
+
+            <div class="es-fe-field">
+                <label class="es-fe-label">CONFIRM PASSWORD</label>
+                <div class="es-fe-pw-wrap">
+                    <input type="password" name="confirm_password" required minlength="8" placeholder="Re-enter your password" autocomplete="new-password" />
+                    <button type="button" class="es-fe-eye es-fe-btn-link btn-link" aria-label="Toggle password"><span class="dashicons dashicons-visibility"></span></button>
                 </div>
             </div>
 

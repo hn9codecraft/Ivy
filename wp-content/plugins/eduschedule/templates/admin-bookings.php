@@ -31,14 +31,23 @@
             <thead>
                 <tr>
                     <th>#</th><th>Date / Time</th><th>Type</th><th>User</th><th>Email</th>
-                    <th>Platform</th><th>Meeting</th><th>Booked</th><th></th>
+                    <th>Package / Sessions</th><th>Payment</th><th>Attendance</th><th>Platform</th><th>Meeting</th><th>Booked</th><th></th>
                 </tr>
             </thead>
             <tbody>
                 <?php if ( empty( $bookings ) ) : ?>
-                    <tr><td colspan="9" class="es-empty-cell">No bookings found.</td></tr>
+                    <tr><td colspan="12" class="es-empty-cell">No bookings found.</td></tr>
                 <?php else : foreach ( $bookings as $b ) :
                     $type_color = ES_Helpers::slot_type_color( $b->slot_type );
+                    $plan = ! empty( $b->user_id ) ? ES_Packages::get_active_plan( $b->user_id ) : null;
+                    $pkg  = $plan ? ES_Packages::get( $plan->package_id ) : null;
+                    if ( ! $pkg && ! empty( $b->user_id ) ) {
+                        $assigned_pkg_id = (int) get_user_meta( $b->user_id, ES_Packages::META_PACKAGE_ID, true );
+                        $pkg = $assigned_pkg_id ? ES_Packages::get( $assigned_pkg_id ) : null;
+                    }
+                    $att_map = ! empty( $b->user_id ) ? ES_Packages::get_attendance_map( $b->user_id ) : array();
+                    $att = ( ! empty( $b->slot_id ) && isset( $att_map[ (int) $b->slot_id ] ) ) ? $att_map[ (int) $b->slot_id ] : array( 'status' => 'none', 'comment' => '' );
+                    $att_label = ES_Packages::att_status_label( $att['status'] );
                 ?>
                     <tr>
                         <td>#<?php echo (int) $b->id; ?></td>
@@ -49,6 +58,28 @@
                         <td><span class="es-tag" style="background:<?php echo esc_attr( $type_color ); ?>20;color:<?php echo esc_attr( $type_color ); ?>"><?php echo esc_html( ES_Helpers::slot_type_label( $b->slot_type ) ); ?></span></td>
                         <td><?php echo esc_html( $b->display_name ); ?></td>
                         <td><a href="mailto:<?php echo esc_attr( $b->user_email ); ?>"><?php echo esc_html( $b->user_email ); ?></a></td>
+                        <td>
+                            <strong><?php echo $pkg ? esc_html( $pkg->package_name ) : '—'; ?></strong>
+                            <?php if ( $plan ) : ?>
+                                <div class="es-cell-sub">Total: <?php echo (int) $plan->total_sessions; ?> · Used: <?php echo (int) $plan->used_sessions; ?> · Left: <?php echo (int) ES_Packages::remaining_sessions( $plan ); ?></div>
+                            <?php elseif ( $pkg ) : ?>
+                                <div class="es-cell-sub">Total sessions: <?php echo (int) ( $pkg->total_sessions ?? 0 ); ?></div>
+                            <?php else : ?>
+                                <div class="es-cell-sub">No active package</div>
+                            <?php endif; ?>
+                        </td>
+                        <td>
+                            <?php if ( $plan ) : ?>
+                                <span class="es-pill es-pill-success"><?php echo esc_html( ucfirst( $plan->status ) ); ?></span>
+                                <?php if ( ! empty( $plan->valid_until ) ) : ?><div class="es-cell-sub">Valid until <?php echo esc_html( date_i18n( 'M j, Y', strtotime( $plan->valid_until ) ) ); ?></div><?php endif; ?>
+                            <?php else : ?>
+                                <span class="es-cell-sub">—</span>
+                            <?php endif; ?>
+                        </td>
+                        <td>
+                            <strong><?php echo esc_html( $att_label ); ?></strong>
+                            <?php if ( ! empty( $att['comment'] ) ) : ?><div class="es-cell-sub"><?php echo esc_html( $att['comment'] ); ?></div><?php endif; ?>
+                        </td>
 
                         <td>
                             <?php

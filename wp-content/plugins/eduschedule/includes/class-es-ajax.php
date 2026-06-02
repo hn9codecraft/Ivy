@@ -4,7 +4,7 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 class ES_Ajax {
 
     public function __construct() {
-        $public = array( 'es_login', 'es_register', 'es_get_calendar_month', 'es_get_slot' );
+        $public = array( 'es_login', 'es_register', 'es_get_calendar_month', 'es_get_slot', 'es_lost_password', 'es_reset_password' );
         $private = array( 'es_book_slot', 'es_cancel_booking', 'es_logout', 'es_update_profile' );
         foreach ( $public as $h ) {
             add_action( "wp_ajax_$h",        array( $this, str_replace( 'es_', 'handle_', $h ) ) );
@@ -59,12 +59,14 @@ class ES_Ajax {
         $phone   = isset( $_POST['phone'] )      ? sanitize_text_field( wp_unslash( $_POST['phone'] ) )      : '';
         $country = isset( $_POST['country'] )    ? strtoupper( substr( sanitize_text_field( wp_unslash( $_POST['country'] ) ), 0, 2 ) ) : '';
         $password= isset( $_POST['password'] )   ? wp_unslash( $_POST['password'] )                          : '';
+        $confirm = isset( $_POST['confirm_password'] ) ? wp_unslash( $_POST['confirm_password'] )             : '';
         $track   = isset( $_POST['track'] )      ? sanitize_text_field( wp_unslash( $_POST['track'] ) )      : '';
         $stay_url= isset( $_POST['stay_url'] )   ? esc_url_raw( wp_unslash( $_POST['stay_url'] ) )           : '';
 
         if ( $first === '' || $last === '' )           wp_send_json_error( array( 'message' => 'Please enter your full name.' ) );
         if ( ! is_email( $email ) )                    wp_send_json_error( array( 'message' => 'Please enter a valid email address.' ) );
         if ( strlen( $password ) < 8 )                 wp_send_json_error( array( 'message' => 'Password must be at least 8 characters.' ) );
+        if ( $confirm !== '' && $password !== $confirm ) wp_send_json_error( array( 'message' => 'Passwords do not match.' ) );
         if ( email_exists( $email ) )                  wp_send_json_error( array( 'message' => 'An account with this email already exists.' ) );
 
         $username = $this->generate_unique_username( $email );
@@ -83,6 +85,12 @@ class ES_Ajax {
         update_user_meta( $user_id, 'es_country', $country );
         update_user_meta( $user_id, 'es_timezone', ES_Helpers::tz_for_country( $country ) );
         if ( $track )  update_user_meta( $user_id, 'es_track', $track );
+
+        // Send registration emails to the student and admin. Uses the plugin's
+        // mail wrapper so From/Reply-To headers are valid on common hosts.
+        if ( class_exists( 'ES_Mailer' ) ) {
+            ES_Mailer::send_registration_notifications( $user_id );
+        }
 
         // Auto-login
         wp_set_current_user( $user_id );
@@ -180,6 +188,111 @@ class ES_Ajax {
         $url_host  = parse_url( $url, PHP_URL_HOST );
         if ( ! $home_host || ! $url_host ) return false;
         return ( strtolower( $home_host ) === strtolower( $url_host ) );
+    }
+
+    /**
+     * Step 1 of the custom password reset: the user submits their email, we
+     * generate a WordPress reset key and email them a link back to our own
+     * login page (?es_action=rp&key=...&login=...) — never to wp-login.php.
+     *
+     * To avoid leaking which emails are registered, the success message is the
+     * same whether or not the account exists.
+     */
+    public function handle_lost_password() {
+        $valid = false;
+        if ( isset( $_POST['nonce'] ) && (
+                wp_verify_nonce( sanitize_key( wp_unslash( $_POST['nonce'] ) ), 'es_login_nonce' ) ||
+                wp_verify_nonce( sanitize_key( wp_unslash( $_POST['nonce'] ) ), 'es_fe_nonce' )
+            ) ) {
+            $valid = true;
+        }
+        if ( ! $valid ) {
+            wp_send_json_error( array( 'message' => 'Security check failed. Please refresh and try again.' ), 403 );
+        }
+
+        $login = isset( $_POST['email'] ) ? sanitize_text_field( wp_unslash( $_POST['email'] ) ) : '';
+        $generic = 'If that email is registered, a password reset link has been sent. Please check your inbox (and spam).';
+
+        if ( $login === '' ) {
+            wp_send_json_error( array( 'message' => 'Please enter your email address.' ) );
+        }
+
+        // Resolve the user by email or login.
+        $user = is_email( $login ) ? get_user_by( 'email', $login ) : get_user_by( 'login', $login );
+        if ( ! $user ) {
+            // Don't reveal non-existence.
+            wp_send_json_success( array( 'message' => $generic ) );
+        }
+
+        $key = get_password_reset_key( $user );
+        if ( is_wp_error( $key ) ) {
+            wp_send_json_success( array( 'message' => $generic ) );
+        }
+
+        // Build a reset link back to a page that hosts the reset form. Prefer a
+        // dedicated [eduschedule_reset] page, then the login page (Settings).
+        $base_url = ES_Helpers::reset_page_url();
+        $reset_link = add_query_arg( array(
+            'es_action' => 'rp',
+            'key'       => rawurlencode( $key ),
+            'login'     => rawurlencode( $user->user_login ),
+        ), $base_url );
+
+        // Send via the plugin mailer (respects SMTP settings).
+        if ( class_exists( 'ES_Mailer' ) ) {
+            ES_Mailer::send_password_reset( $user, $reset_link );
+        }
+
+        wp_send_json_success( array( 'message' => $generic ) );
+    }
+
+    /**
+     * Step 2 of the custom password reset: validate the key + login and set the
+     * new password. Uses WordPress's own key check so links expire correctly.
+     */
+    public function handle_reset_password() {
+        $valid = false;
+        if ( isset( $_POST['nonce'] ) && (
+                wp_verify_nonce( sanitize_key( wp_unslash( $_POST['nonce'] ) ), 'es_login_nonce' ) ||
+                wp_verify_nonce( sanitize_key( wp_unslash( $_POST['nonce'] ) ), 'es_fe_nonce' )
+            ) ) {
+            $valid = true;
+        }
+        if ( ! $valid ) {
+            wp_send_json_error( array( 'message' => 'Security check failed. Please refresh and try again.' ), 403 );
+        }
+
+        $key   = isset( $_POST['key'] )   ? sanitize_text_field( wp_unslash( $_POST['key'] ) ) : '';
+        $login = isset( $_POST['login'] ) ? sanitize_text_field( wp_unslash( $_POST['login'] ) ) : '';
+        $pass1 = isset( $_POST['password'] )        ? (string) wp_unslash( $_POST['password'] ) : '';
+        $pass2 = isset( $_POST['password_confirm'] ) ? (string) wp_unslash( $_POST['password_confirm'] ) : '';
+
+        if ( $key === '' || $login === '' ) {
+            wp_send_json_error( array( 'message' => 'This reset link is invalid. Please request a new one.' ) );
+        }
+        if ( strlen( $pass1 ) < 6 ) {
+            wp_send_json_error( array( 'message' => 'Password must be at least 6 characters.' ) );
+        }
+        if ( $pass1 !== $pass2 ) {
+            wp_send_json_error( array( 'message' => 'The two passwords do not match.' ) );
+        }
+
+        $user = check_password_reset_key( $key, $login );
+        if ( is_wp_error( $user ) ) {
+            wp_send_json_error( array( 'message' => 'This reset link has expired or is invalid. Please request a new one.' ) );
+        }
+
+        reset_password( $user, $pass1 );
+
+        // Where to send them next (their login page).
+        $s        = ES_Helpers::settings();
+        $login_id = (int) ( $s['login_page_id'] ?? 0 );
+        $login_url = $login_id ? get_permalink( $login_id ) : home_url( '/' );
+
+        wp_send_json_success( array(
+            'message'   => 'Your password has been reset. You can now log in.',
+            'login_url' => $login_url,
+        ) );
     }
 
     public function handle_logout() {
@@ -320,11 +433,17 @@ class ES_Ajax {
     }
 
     public function handle_book_slot() {
-        $this->check();
+        // Verify nonce with a clear, recoverable error message (stale nonces on
+        // cached pages are the most common cause of "booking silently fails").
+        if ( ! check_ajax_referer( 'es_fe_nonce', 'nonce', false ) ) {
+            wp_send_json_error( array( 'message' => 'Your session expired. Please refresh the page and try booking again.' ), 403 );
+        }
+
         $slot_id = isset( $_POST['slot_id'] ) ? (int) $_POST['slot_id'] : 0;
         $note    = isset( $_POST['note'] ) ? sanitize_textarea_field( wp_unslash( $_POST['note'] ) ) : '';
         $uid = get_current_user_id();
         if ( ! $uid ) wp_send_json_error( array( 'message' => 'Please log in first.' ) );
+        if ( ! $slot_id ) wp_send_json_error( array( 'message' => 'No slot was selected.' ) );
 
         $slot = ES_DB::get_slot( $slot_id );
         if ( ! $slot ) wp_send_json_error( array( 'message' => 'Slot not found.' ) );
@@ -337,6 +456,18 @@ class ES_Ajax {
 
         $booked = ES_DB::count_bookings( $slot_id );
         if ( $booked >= (int) $slot->capacity ) wp_send_json_error( array( 'message' => 'This slot is fully booked.' ) );
+
+        // (#11) If the user holds a session-limited plan and has used all of
+        // their sessions, block further self-scheduling. Users with no plan
+        // (e.g. open public bookings) are unaffected. Note: the session is NOT
+        // consumed here — consumption happens when attendance is marked (Present
+        // or Absent-without-permission), keeping a single source of truth.
+        $plan = ES_Packages::get_active_plan( $uid );
+        if ( $plan && (int) ( $plan->total_sessions ?? 0 ) > 0 ) {
+            if ( ES_Packages::remaining_sessions( $plan ) <= 0 ) {
+                wp_send_json_error( array( 'message' => 'You have used all the sessions in your current package. Please renew or upgrade to book more.' ) );
+            }
+        }
 
         $data = array(
             'slot_id'   => $slot_id,
@@ -370,8 +501,9 @@ class ES_Ajax {
             wp_send_json_error( array( 'message' => 'Could not save booking. Please try again.' ) );
         }
 
-        @ES_Mailer::send_booking_confirmation( $bid );
-        @ES_Mailer::send_admin_notification( $bid );
+        // Pass the user's note through as an additional comment in the emails (#14).
+        ES_Mailer::send_booking_confirmation( $bid, $note );
+        ES_Mailer::send_admin_notification( $bid, $note );
 
         wp_send_json_success( array(
             'booking_id' => $bid,

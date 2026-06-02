@@ -177,6 +177,13 @@ function custom_theme_styles() {
         array(),
         HELLO_ELEMENTOR_VERSION
     );
+
+	 wp_enqueue_style(
+        'package-css',
+        HELLO_THEME_STYLE_URL . 'package.css',
+        array(),
+        HELLO_ELEMENTOR_VERSION
+    );
 }
 add_action('wp_enqueue_scripts', 'custom_theme_styles');
 
@@ -329,3 +336,59 @@ function create_course_taxonomy() {
     ]);
 }
 add_action('init', 'create_course_taxonomy');
+
+
+/* Disable comments for all post types */
+function vworks_disable_comments_all_post_types() {
+    $post_types = get_post_types();
+
+    foreach ($post_types as $post_type) {
+        if (post_type_supports($post_type, 'comments')) {
+            remove_post_type_support($post_type, 'comments');
+            remove_post_type_support($post_type, 'trackbacks');
+        }
+    }
+}
+add_action('admin_init', 'vworks_disable_comments_all_post_types');
+
+
+/* Close comments on frontend */
+function vworks_close_comments_status() {
+    return false;
+}
+add_filter('comments_open', 'vworks_close_comments_status', 20, 2);
+add_filter('pings_open', 'vworks_close_comments_status', 20, 2);
+
+
+/* Hide existing comments */
+function vworks_hide_existing_comments($comments) {
+    return array();
+}
+add_filter('comments_array', 'vworks_hide_existing_comments', 10, 2);
+
+
+/* Remove Comments menu from admin */
+function vworks_remove_comments_admin_menu() {
+    remove_menu_page('edit-comments.php');
+}
+add_action('admin_menu', 'vworks_remove_comments_admin_menu');
+
+
+/* Remove Comments from admin bar */
+function vworks_remove_comments_admin_bar() {
+    global $wp_admin_bar;
+    $wp_admin_bar->remove_menu('comments');
+}
+add_action('wp_before_admin_bar_render', 'vworks_remove_comments_admin_bar');
+
+
+/* Redirect comments admin page */
+function vworks_redirect_comments_page() {
+    global $pagenow;
+
+    if ($pagenow === 'edit-comments.php') {
+        wp_redirect(admin_url());
+        exit;
+    }
+}
+add_action('admin_init', 'vworks_redirect_comments_page');

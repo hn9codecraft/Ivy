@@ -14,11 +14,13 @@ class ES_Helpers {
             'login_page_id'    => 0,
             'register_page_id' => 0,
             'dashboard_page_id'=> 0,
+            'reset_page_id'    => 0,   // dedicated [eduschedule_reset] page
 
             // Currency / Billing
             'default_currency' => 'INR',
-            'yearly_discount'  => 0,   // percent off when paying yearly (one-time)
-            'enable_yearly'    => 1,   // enable yearly toggle on package shortcode
+            'yearly_discount'        => 0,   // percent off for the discounted multi-month cycle
+            'yearly_discount_months' => 12,  // how many months the discounted cycle covers
+            'enable_yearly'          => 1,   // enable discounted billing toggle on package shortcode
 
             // Stripe
             'stripe_enabled'        => 0,
@@ -28,6 +30,24 @@ class ES_Helpers {
             'stripe_live_pub_key'   => '',
             'stripe_live_secret'    => '',
             'stripe_webhook_secret' => '',
+
+            // Email / Notifications
+            'from_name'    => get_bloginfo( 'name' ),
+            'from_email'   => '',   // blank → falls back to WP default (admin_email-derived)
+            'reply_to'     => '',   // blank → uses from_email
+            'notify_admin' => 1,    // send admin a copy on bookings / after-call
+            'admin_notify_email' => '', // blank → site admin_email
+
+            // SMTP — route all plugin mail through an authenticated SMTP server
+            // so providers like Gmail actually accept the message instead of
+            // silently dropping unauthenticated PHP mail().
+            'smtp_enabled'    => 0,
+            'smtp_host'       => '',
+            'smtp_port'       => 587,
+            'smtp_encryption' => 'tls',  // tls | ssl | none
+            'smtp_auth'       => 1,      // SMTP requires authentication
+            'smtp_username'   => '',
+            'smtp_password'   => '',     // app password for Gmail, etc.
         ) );
     }
 
@@ -179,5 +199,70 @@ class ES_Helpers {
 
     public static function admin_capability() {
         return apply_filters( 'eduschedule_admin_capability', 'manage_options' );
+    }
+
+    /**
+     * Resolve the best base URL for the self-service password-reset flow.
+     * Preference order, so the flow stays self-contained inside the plugin:
+     *   1) a published page containing the [eduschedule_reset] shortcode
+     *   2) a published page containing [eduschedule_login] / [eduschedule_auth]
+     *   3) the configured login page (Settings)
+     *   4) the site home
+     * Cached in a transient to avoid scanning pages on every request.
+     */
+    public static function reset_page_url() {
+        $cached = get_transient( 'es_reset_page_url' );
+        if ( $cached !== false ) return $cached;
+
+        $url = '';
+
+        // Pass 0 (v4.4.2): the admin explicitly chose a Reset Password page in
+        // Settings → Frontend Pages. Always honour that first, regardless of
+        // what shortcodes the page contains, so an admin can override the
+        // auto-detect when their page uses a builder block or a non-standard
+        // shortcode wrapper.
+        $s        = self::settings();
+        $reset_id = (int) ( $s['reset_page_id'] ?? 0 );
+        if ( $reset_id && ( $p = get_post( $reset_id ) ) && $p->post_status === 'publish' ) {
+            $url = get_permalink( $reset_id );
+        }
+
+        if ( ! $url ) {
+            $pages = get_posts( array(
+                'post_type'   => 'page',
+                'post_status' => 'publish',
+                'numberposts' => 100,
+                'fields'      => 'ids',
+            ) );
+
+            // Pass 1: dedicated reset page.
+            foreach ( $pages as $pid ) {
+                $content = get_post_field( 'post_content', $pid );
+                if ( has_shortcode( $content, 'eduschedule_reset' ) || has_shortcode( $content, 'es_reset_password_form' ) || has_shortcode( $content, 'ivy_reset_password' ) ) {
+                    $url = get_permalink( $pid );
+                    break;
+                }
+            }
+            // Pass 2: login/auth page (the reset view also renders there).
+            if ( ! $url ) {
+                foreach ( $pages as $pid ) {
+                    $content = get_post_field( 'post_content', $pid );
+                    if ( has_shortcode( $content, 'eduschedule_login' ) || has_shortcode( $content, 'eduschedule_auth' ) ) {
+                        $url = get_permalink( $pid );
+                        break;
+                    }
+                }
+            }
+            // Pass 3: configured login page.
+            if ( ! $url ) {
+                $login_id = (int) ( $s['login_page_id'] ?? 0 );
+                if ( $login_id ) $url = get_permalink( $login_id );
+            }
+            // Pass 4: home.
+            if ( ! $url ) $url = home_url( '/' );
+        }
+
+        set_transient( 'es_reset_page_url', $url, HOUR_IN_SECONDS );
+        return $url;
     }
 }

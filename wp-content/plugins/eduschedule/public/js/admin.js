@@ -93,13 +93,16 @@
             html += '<button type="button" class="' + cls + '" data-iso="' + iso + '">';
             html += '<div class="day-num">' + dnum + '</div>';
 
-            // Show up to 3 events, then "+N more"
+            // Show up to 3 events, then "+N more". Every event here is a
+            // confirmed booking, so surface the student name when available.
             var maxShow = 3;
             for (var j = 0; j < Math.min(slots.length, maxShow); j++) {
                 var s = slots[j];
-                var label = s.start + (s.title ? ' ' + s.title : '');
-                html += '<span class="es-event" style="--type-color:' + s.type_color + '" title="' + escapeHtml(s.type_label + ' · ' + s.start + '-' + s.end) + '">';
-                html += escapeHtml(label.length > 22 ? label.slice(0, 22) + '…' : label);
+                var who = s.user_name ? (' · ' + s.user_name) : '';
+                var label = s.start + (s.title ? ' ' + s.title : '') + who;
+                var tip = s.type_label + ' · ' + s.start + '-' + s.end + (s.user_name ? (' · ' + s.user_name) : '');
+                html += '<span class="es-event" style="--type-color:' + s.type_color + '" title="' + escapeHtml(tip) + '">';
+                html += escapeHtml(label.length > 26 ? label.slice(0, 26) + '…' : label);
                 html += '</span>';
             }
             if (slots.length > maxShow) {
@@ -539,7 +542,22 @@
 
             html += '<button type="button" class="' + cls + '" data-iso="' + iso + '">';
             html += '<div class="day-num">' + dnum + '</div>';
-            if (slots.length) html += '<div class="day-meta">' + slots.length + ' open</div>';
+            if (slots.length) {
+                // Count slots that still have room. Personal (admin-blocker)
+                // slots are never "open" to book.
+                var openCount = 0;
+                slots.forEach(function (s) {
+                    var cap    = parseInt(s.capacity, 10) || 0;
+                    var booked = parseInt(s.booked, 10) || 0;
+                    if (s.type !== 'personal' && booked < cap) openCount++;
+                });
+                if (openCount > 0) {
+                    html += '<div class="day-meta">' + openCount + ' open</div>';
+                } else {
+                    // Has slots but none bookable → all full.
+                    html += '<div class="day-meta day-meta-full" style="color:#ef4444;font-weight:600;">FULL</div>';
+                }
+            }
             html += '</button>';
         }
         html += '</div>';

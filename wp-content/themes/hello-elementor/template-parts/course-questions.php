@@ -14,15 +14,15 @@ if ($course_id && get_post_status($course_id)):
     if ($post):
 ?>
 
-<div style="max-width:900px;margin:auto;padding:20px;color:#fff;">
-
+<div class="course-questions">
+<div class="container">
     <!-- Course Title -->
-    <h1><?php echo esc_html($post->post_title); ?></h1>
+    <!-- <h1><?php echo esc_html($post->post_title); ?></h1> -->
 
     <div>
     <?php 
 	    if (!is_user_logged_in()) {
-	        echo do_shortcode('[eduschedule_auth]');
+	 		echo '<div class="login-page">' . do_shortcode('[eduschedule_login]') . '</div>';
 	    } else {
 
 	        $rows = get_field('course_relationship', 'options');
@@ -55,7 +55,7 @@ if ($course_id && get_post_status($course_id)):
 	    }
     ?>
 </div>
-
+	</div>
 </div>
 
 <?php

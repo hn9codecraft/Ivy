@@ -8,6 +8,30 @@ class ES_DB {
         return $wpdb->prefix . 'es_' . $name;
     }
 
+    /**
+     * Return the Zoom/meeting join URL for the user's next upcoming confirmed
+     * booking (or most recent today), or '' if none. Powers the "Join Meet" button.
+     */
+    public static function latest_join_url_for_user( $user_id ) {
+        global $wpdb;
+        $b = $wpdb->prefix . 'es_bookings';
+        $s = $wpdb->prefix . 'es_slots';
+        $today = current_time( 'Y-m-d' );
+        $url = $wpdb->get_var( $wpdb->prepare(
+            "SELECT bk.zoom_join_url
+               FROM {$b} bk
+               INNER JOIN {$s} sl ON sl.id = bk.slot_id
+              WHERE bk.user_id = %d
+                AND bk.status != 'cancelled'
+                AND bk.zoom_join_url IS NOT NULL AND bk.zoom_join_url != ''
+                AND sl.slot_date >= %s
+              ORDER BY sl.slot_date ASC, sl.start_time ASC
+              LIMIT 1",
+            (int) $user_id, $today
+        ) );
+        return $url ?: '';
+    }
+
     /* ============== SLOTS ============== */
 
     public static function insert_slot( $data ) {
@@ -18,6 +42,7 @@ class ES_DB {
             'end_time' => '',
             'duration_min' => 60,
             'slot_type' => '1to1',
+            'group_id' => null,
             'capacity' => 1,
             'platform' => 'Zoom',
             'title' => '',
@@ -54,24 +79,26 @@ class ES_DB {
 
         global $wpdb;
 
+        // Only slots that have at least one confirmed booking (INNER JOIN).
+        // IMPORTANT: select s.* FIRST and avoid b.* so the slots table's `id`
+        // isn't clobbered by the bookings `id` — the calendar edits/deletes by
+        // slot id. We surface just the booked student's name/email for display.
         $query = $wpdb->prepare(
-            "SELECT 
+            "SELECT
                 s.*,
-                b.*,
-                u.display_name AS user_name,
-                u.user_email,
-                COUNT(b.id) AS booked_count
+                COUNT(b.id) AS booked_count,
+                MAX(u.display_name) AS user_name,
+                MAX(u.user_email)   AS user_email
 
             FROM " . self::table('slots') . " s
 
-            INNER JOIN " . self::table('bookings') . " b 
-                ON b.slot_id = s.id
+            INNER JOIN " . self::table('bookings') . " b
+                ON b.slot_id = s.id AND b.status = %s
 
             LEFT JOIN {$wpdb->users} u
                 ON u.ID = b.user_id
 
-            WHERE b.status = %s
-            AND s.slot_date BETWEEN %s AND %s
+            WHERE s.slot_date BETWEEN %s AND %s
 
             GROUP BY s.id
 
@@ -101,7 +128,24 @@ class ES_DB {
     }
 
     public static function get_slots_for_date( $date ) {
-        return self::get_slots_in_range_calendar( $date, $date );
+        // IMPORTANT: use a LEFT JOIN here. get_slots_in_range_calendar() uses an
+        // INNER JOIN on confirmed bookings, which silently drops any slot that
+        // has zero bookings — i.e. brand-new, fully-available slots would never
+        // appear in the day view, making them impossible to book. The month
+        // view (get_slots_in_range) already uses a LEFT JOIN; the day view must
+        // match it so available slots are bookable.
+        global $wpdb;
+        $rows = $wpdb->get_results( $wpdb->prepare(
+            "SELECT s.*, COUNT(b.id) AS booked_count
+             FROM " . self::table( 'slots' ) . " s
+             LEFT JOIN " . self::table( 'bookings' ) . " b
+                    ON b.slot_id = s.id AND b.status = 'confirmed'
+             WHERE s.slot_date = %s
+             GROUP BY s.id
+             ORDER BY s.start_time ASC",
+            $date
+        ) );
+        return $rows ?: array();
     }
 
     public static function count_bookings( $slot_id ) {
@@ -124,6 +168,7 @@ class ES_DB {
             'zoom_start_url' => null,
             'zoom_password' => null,
             'user_note' => '',
+            'payment_id' => null, // v4.4 — which purchased package this booking draws from
         );
         $data = wp_parse_args( $data, $defaults );
         if ( $wpdb->insert( self::table( 'bookings' ), $data ) ) {

@@ -15,9 +15,17 @@
                 <label class="es-fe-label">PASSWORD</label>
                 <div class="es-fe-pw-wrap">
                     <input type="password" name="password" required placeholder="••••••••" autocomplete="current-password" />
-                    <button type="button" class="es-fe-eye" aria-label="Toggle password"><span class="dashicons dashicons-visibility"></span></button>
+                    <button type="button" class="es-fe-eye es-fe-btn-link btn-link" aria-label="Toggle password"><span class="dashicons dashicons-visibility"></span></button>
                 </div>
-                <a href="<?php echo esc_url( wp_lostpassword_url() ); ?>" class="es-fe-forgot">Forgot password?</a>
+                <?php
+                // Forgot password → reload THIS page with the reset flag. The
+                // login/auth shortcode on this page renders the custom reset
+                // view, so the flow works no matter which page hosts it (and
+                // doesn't depend on login_page_id being configured).
+                $es_self_url   = remove_query_arg( array( 'es_action', 'key', 'login' ) );
+                $es_forgot_url = add_query_arg( 'es_action', 'lostpassword', $es_self_url );
+                ?>
+                <a href="<?php echo esc_url( $es_forgot_url ); ?>" class="es-fe-forgot">Forgot password?</a>
             </div>
 
             <button type="submit" class="es-fe-btn es-fe-btn-primary">Log in →</button>

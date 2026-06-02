@@ -64,7 +64,14 @@
         $.post(ES_FE.ajax_url, data).done(function (json) {
             if (json && json.success) {
                 $msg.removeClass('es-msg-error').addClass('es-msg-success').text(json.data.message).show();
-                setTimeout(function () { window.location.href = json.data.redirect; }, 400);
+                // If the login happened inside the packages modal, reload the
+                // SAME page so the payment form appears (instead of redirecting
+                // to the dashboard).
+                if ($form.find('[name="es_login_reload"]').length) {
+                    setTimeout(function () { window.location.reload(); }, 500);
+                } else {
+                    setTimeout(function () { window.location.href = json.data.redirect; }, 400);
+                }
             } else {
                 $btn.prop('disabled', false).text('Log in →');
                 $msg.removeClass('es-msg-success').addClass('es-msg-error').text((json && json.data && json.data.message) ? json.data.message : 'Login failed').show();
@@ -75,7 +82,75 @@
         });
     });
 
-    /* ============= REGISTER ============= */
+    /* ============= FORGOT PASSWORD — request reset link ============= */
+    $(document).on('submit', '#es-lostpw-form', function (e) {
+        e.preventDefault();
+        var $form = $(this);
+        var $btn = $form.find('button[type="submit"]');
+        var $msg = $('#es-lostpw-msg').hide();
+        var nonce = ES_FE.login_nonce || ES_FE.nonce;
+
+        $btn.prop('disabled', true).text('Sending…');
+        $.post(ES_FE.ajax_url, {
+            action: 'es_lost_password',
+            nonce: nonce,
+            email: $form.find('[name="email"]').val()
+        }).done(function (json) {
+            if (json && json.success) {
+                $msg.removeClass('es-msg-error').addClass('es-msg-success').text(json.data.message).show();
+                $form.find('input[name="email"]').val('');
+                $btn.prop('disabled', false).text('Send reset link →');
+            } else {
+                $btn.prop('disabled', false).text('Send reset link →');
+                $msg.removeClass('es-msg-success').addClass('es-msg-error').text((json && json.data && json.data.message) ? json.data.message : 'Could not send the reset link.').show();
+            }
+        }).fail(function () {
+            $btn.prop('disabled', false).text('Send reset link →');
+            $msg.addClass('es-msg-error').text('Server error. Try again.').show();
+        });
+    });
+
+    /* ============= RESET PASSWORD — set a new password ============= */
+    $(document).on('submit', '#es-resetpw-form', function (e) {
+        e.preventDefault();
+        var $form = $(this);
+        var $btn = $form.find('button[type="submit"]');
+        var $msg = $('#es-resetpw-msg').hide();
+        var nonce = ES_FE.login_nonce || ES_FE.nonce;
+
+        var pw  = $form.find('[name="password"]').val();
+        var pw2 = $form.find('[name="password_confirm"]').val();
+        if (!pw || pw.length < 6) {
+            $msg.removeClass('es-msg-success').addClass('es-msg-error').text('Password must be at least 6 characters.').show();
+            return;
+        }
+        if (pw !== pw2) {
+            $msg.removeClass('es-msg-success').addClass('es-msg-error').text('The two passwords do not match.').show();
+            return;
+        }
+
+        $btn.prop('disabled', true).text('Saving…');
+        $.post(ES_FE.ajax_url, {
+            action: 'es_reset_password',
+            nonce: nonce,
+            key: $form.find('[name="key"]').val(),
+            login: $form.find('[name="login"]').val(),
+            password: pw,
+            password_confirm: pw2
+        }).done(function (json) {
+            if (json && json.success) {
+                $msg.removeClass('es-msg-error').addClass('es-msg-success').text(json.data.message + ' Redirecting…').show();
+                setTimeout(function () { window.location.href = json.data.login_url; }, 1200);
+            } else {
+                $btn.prop('disabled', false).text('Set new password →');
+                $msg.removeClass('es-msg-success').addClass('es-msg-error').text((json && json.data && json.data.message) ? json.data.message : 'Could not reset password.').show();
+            }
+        }).fail(function () {
+            $btn.prop('disabled', false).text('Set new password →');
+            $msg.addClass('es-msg-error').text('Server error. Try again.').show();
+        });
+    });
+
     $(document).on('submit', '#es-register-form', function (e) {
         e.preventDefault();
         var $form = $(this);
@@ -94,12 +169,23 @@
             phone: $form.find('[name="phone"]').val(),
             country: $form.find('[name="country"]').val(),
             password: $form.find('[name="password"]').val(),
+            confirm_password: $form.find('[name="confirm_password"]').val(),
             // Stay on the same page after register
             stay_url: (typeof ES_FE !== 'undefined' && ES_FE.current_url) ? ES_FE.current_url : window.location.href,
         };
 
         if (!data.country) {
             $msg.addClass('es-msg-error').text('Please select your country.').show();
+            return;
+        }
+
+        if ((data.password || '').length < 8) {
+            $msg.removeClass('es-msg-success').addClass('es-msg-error').text('Password must be at least 8 characters.').show();
+            return;
+        }
+
+        if (data.password !== data.confirm_password) {
+            $msg.removeClass('es-msg-success').addClass('es-msg-error').text('Passwords do not match.').show();
             return;
         }
 
@@ -278,13 +364,19 @@
             note: note,
         }).done(function (json) {
             $btn.prop('disabled', false).text('Confirm Booking');
-            if (json.success) {
+            if (json && json.success) {
                 $('#es-fe-book-modal').hide();
                 toast('Booking confirmed! Check your email for details.');
                 setTimeout(function () { window.location.reload(); }, 800);
             } else {
-                toast(json.data.message || 'Booking failed.', 'danger');
+                toast((json && json.data && json.data.message) ? json.data.message : 'Booking failed.', 'danger');
             }
+        }).fail(function (xhr) {
+            $btn.prop('disabled', false).text('Confirm Booking');
+            var msg = 'Booking failed. Please try again.';
+            if (xhr && xhr.status === 403) msg = 'Your session expired. Please refresh the page and try again.';
+            else if (xhr && xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message) msg = xhr.responseJSON.data.message;
+            toast(msg, 'danger');
         });
     });
 
@@ -405,8 +497,8 @@
         html += '<div class="es-pcal-cal-head">';
         html += '<div class="es-pcal-cal-month">' + escapeHtml(monthTxt) + '</div>';
         html += '<div class="es-pcal-cal-nav">';
-        html += '<button type="button" class="es-pcal-icon-btn" data-act="prev"' + (pcalIsPrevBlocked() ? ' disabled' : '') + '>' + ICON.arrowL + '</button>';
-        html += '<button type="button" class="es-pcal-icon-btn" data-act="next">' + ICON.arrowR + '</button>';
+        html += '<button type="button" class="es-pcal-icon-btn btn-link" data-act="prev"' + (pcalIsPrevBlocked() ? ' disabled' : '') + '>' + ICON.arrowL + '</button>';
+        html += '<button type="button" class="es-pcal-icon-btn btn-link" data-act="next">' + ICON.arrowR + '</button>';
         html += '</div></div>';
 
         html += '<div class="es-pcal-cal-grid">';
@@ -456,7 +548,7 @@
                 PCal.state.selectedDates.forEach(function (date) {
                     html += '<div class="es-pcal-sel-pill">';
                     html += '<span>' + escapeHtml(pcalFmtDate(date)) + '</span>';
-                    html += '<button type="button" data-remove-date="' + escapeHtml(date) + '" aria-label="Remove">✕</button>';
+                    html += '<button type="button" class="btn-remove" data-remove-date="' + escapeHtml(date) + '" aria-label="Remove">✕</button>';
                     html += '</div>';
                 });
                 html += '</div></div>';
@@ -466,8 +558,8 @@
 
         // Bottom actions
         html += '<div class="es-pcal-actions">';
-        html += '<button type="button" class="es-pcal-btn-primary" data-act="next-step"' + (!hasSel ? ' disabled' : '') + '>';
-        html += 'Next ' + ICON.arrowR;
+        html += '<button type="button" class="btn-primary" data-act="next-step"' + (!hasSel ? ' disabled' : '') + '>';
+        html += 'Next ' ;
         html += '</button>';
         html += '</div>';
 
@@ -548,7 +640,7 @@
             html += '<div class="es-pcal-date-card" data-date="' + escapeHtml(date) + '">';
             html += '<div class="es-pcal-date-head">';
             html += '<div class="es-pcal-date-title">' + escapeHtml(pcalFmtDate(date)) + '</div>';
-            html += '<button type="button" class="es-pcal-change-btn" data-act="back-to-cal">' + ICON.arrowL + ' Change date</button>';
+            html += '<button type="button" class=" btn-primary" data-act="back-to-cal"> Change date</button>';
             html += '</div>';
             html += '<div class="es-pcal-slot-grid" data-date="' + escapeHtml(date) + '">';
 
@@ -564,8 +656,8 @@
 
         // Actions
         html += '<div class="es-pcal-actions">';
-        html += '<button type="button" class="es-pcal-icon-btn-lg" data-act="back-to-cal">' + ICON.arrowL + '</button>';
-        html += '<button type="button" class="es-pcal-btn-primary" data-act="to-step3">Next ' + ICON.arrowR + '</button>';
+        html += '<button type="button" class="es-pcal-icon-btn-lg  btn-link" data-act="back-to-cal">' + ICON.arrowL + '</button>';
+        html += '<button type="button" class="btn-primary" data-act="to-step3">Next </button>';
         html += '</div>';
 
         PCal.$wrap.html(html);
@@ -577,49 +669,92 @@
     }
 
     function pcalRenderSlots(date) {
-        var slots = PCal.state.slotsByDate[date] || [];
-        if (!slots.length) return '<div class="es-pcal-no-slots">No available slots for this date.</div>';
+        var slots = PCal.state.slotsByDate && PCal.state.slotsByDate[date]
+            ? PCal.state.slotsByDate[date]
+            : [];
+
+        if (!slots.length) {
+            return '<div class="es-pcal-no-slots">No available slots for this date.</div>';
+        }
 
         var html = '';
-        slots.forEach(function (slot) {
-            // Skip past or already-booked or full slots from rendering as bookable
-            var bookable = !slot.is_past && !slot.already_booked && !slot.is_full;
-            var selected = PCal.state.chosenSlots[date] === slot.id;
-            var cls = 'es-pcal-slot-btn' + (selected ? ' is-selected' : '') + (!bookable ? ' is-disabled' : '');
 
-            html += '<button type="button" class="' + cls + '" data-date="' + escapeHtml(date) + '" data-slot-id="' + slot.id + '"';
-            if (!bookable) html += ' disabled';
-            html += ' style="--type-color:' + slot.type_color + '">';
-            html += '<div class="es-pcal-slot-time">' + escapeHtml(slot.start_user) + '</div>';
-            html += '<div class="es-pcal-slot-time-range">' + escapeHtml(slot.start_user) + ' - ' + escapeHtml(slot.end_user) + '</div>';
-            html += '<div class="es-pcal-slot-meta">' + slot.duration + ' Min · ' + escapeHtml(slot.type_label) + '</div>';
-            if (slot.capacity > 1) {
-                var rem = slot.capacity - slot.booked;
-                html += '<div class="es-pcal-slot-cap">' + (rem <= 0 ? 'Full' : (rem + ' left')) + '</div>';
-            } else if (slot.is_full || slot.already_booked) {
-                html += '<div class="es-pcal-slot-cap">' + (slot.already_booked ? 'Booked' : 'Full') + '</div>';
+        slots.forEach(function (slot) {
+            var bookable = !slot.is_past && !slot.already_booked && !slot.is_full;
+            var selected = PCal.state.chosenSlots && PCal.state.chosenSlots[date] === slot.id;
+
+            var cls = 'es-pcal-slot-btn' +
+                (selected ? ' is-selected' : '') +
+                (!bookable ? ' is-disabled' : '');
+
+            var rem = Number(slot.capacity || 0) - Number(slot.booked || 0);
+
+            html += '<button type="button" class="' + cls + '"';
+            html += ' data-date="' + escapeHtml(date) + '"';
+            html += ' data-slot-id="' + escapeHtml(String(slot.id)) + '"';
+
+            if (!bookable) {
+                html += ' disabled';
             }
+
+            html += ' style="--type-color:' + escapeHtml(slot.type_color || '#999') + '">';
+
+            html += '<div class="es-pcal-slot-time">' + escapeHtml(slot.start_user || '') + '</div>';
+            html += '<div class="es-pcal-slot-time-range">' +
+                escapeHtml(slot.start_user || '') + ' - ' + escapeHtml(slot.end_user || '') +
+            '</div>';
+
+            html += '<div class="es-pcal-slot-meta">' +
+                escapeHtml(String(slot.duration || '')) + ' Min · ' +
+                escapeHtml(slot.type_label || '') +
+            '</div>';
+
+            if (Number(slot.capacity) > 1) {
+                html += '<div class="es-pcal-slot-cap">' +
+                    (rem <= 0 ? 'Full' : rem + ' left') +
+                '</div>';
+            } else if (slot.is_full || slot.already_booked) {
+                html += '<div class="es-pcal-slot-cap">' +
+                    (slot.already_booked ? 'Booked' : 'Full') +
+                '</div>';
+            }
+
             html += '</button>';
         });
+
         return html;
     }
 
     function pcalLoadSlots(date) {
-        $.post(ES_FE.ajax_url, {
-            action: 'es_get_slot',
-            nonce: ES_FE.nonce,
-            date: date,
-            types: PCal.config.types
-        }).done(function (json) {
-            if (json.success) {
-                PCal.state.slotsByDate[date] = json.data.slots;
-                // Re-render only this date's grid
-                var $grid = $('.es-pcal-app .es-pcal-slot-grid[data-date="' + date + '"]');
-                if ($grid.length) $grid.html(pcalRenderSlots(date));
-            }
-        });
-    }
+    $.post(ES_FE.ajax_url, {
+        action: 'es_get_slot',
+        nonce: ES_FE.nonce,
+        date: date,
+        types: PCal.config.types
+    }).done(function (json) {
+        var $grid = $('.es-pcal-app .es-pcal-slot-grid[data-date="' + date + '"]');
 
+        if (json && json.success && json.data && Array.isArray(json.data.slots)) {
+            PCal.state.slotsByDate[date] = json.data.slots;
+
+            if ($grid.length) {
+                $grid.html(pcalRenderSlots(date));
+            }
+        } else {
+            PCal.state.slotsByDate[date] = [];
+
+            if ($grid.length) {
+                $grid.html('<div class="es-pcal-no-slots">No available slots for this date.</div>');
+            }
+        }
+    }).fail(function () {
+        var $grid = $('.es-pcal-app .es-pcal-slot-grid[data-date="' + date + '"]');
+
+        if ($grid.length) {
+            $grid.html('<div class="es-pcal-no-slots">Could not load slots. Please try again.</div>');
+        }
+    });
+}
     $(document).on('click', '.es-pcal-app [data-act="back-to-cal"]', function () {
         PCal.state.step = 1;
         pcalRender();
@@ -669,8 +804,8 @@
         html += '</div></div>';
 
         html += '<div class="es-pcal-actions">';
-        html += '<button type="button" class="es-pcal-icon-btn-lg" data-act="back-to-slots">' + ICON.arrowL + '</button>';
-        html += '<button type="button" class="es-pcal-btn-primary" data-act="to-step4">Review Booking ' + ICON.arrowR + '</button>';
+        html += '<button type="button" class="es-pcal-icon-btn-lg  btn-link" data-act="back-to-slots">' + ICON.arrowL + '</button>';
+        html += '<button type="button" class="btn-primary" data-act="to-step4">Review Booking </button>';
         html += '</div>';
 
         PCal.$wrap.html(html);
@@ -732,8 +867,8 @@
         html += '</div></div>';
 
         html += '<div class="es-pcal-actions">';
-        html += '<button type="button" class="es-pcal-icon-btn-lg" data-act="back-to-form">' + ICON.arrowL + '</button>';
-        html += '<button type="button" class="es-pcal-btn-primary" data-act="submit-booking">Confirm &amp; Book ' + ICON.arrowR + '</button>';
+        html += '<button type="button" class="es-pcal-icon-btn-lg  btn-link" data-act="back-to-form">' + ICON.arrowL + '</button>';
+        html += '<button type="button" class="btn-primary" data-act="submit-booking">Confirm &amp; Book </button>';
         html += '</div>';
 
         PCal.$wrap.html(html);
@@ -809,8 +944,11 @@
                     results.push({ date: date, ok: false, message: (json.data && json.data.message) || 'Booking failed' });
                 }
                 next();
-            }).fail(function () {
-                results.push({ date: date, ok: false, message: 'Network error' });
+            }).fail(function (xhr) {
+                var msg = 'Network error';
+                if (xhr && xhr.status === 403) msg = 'Your session expired — please refresh the page and book again.';
+                else if (xhr && xhr.responseJSON && xhr.responseJSON.data && xhr.responseJSON.data.message) msg = xhr.responseJSON.data.message;
+                results.push({ date: date, ok: false, message: msg });
                 next();
             });
         }
@@ -853,7 +991,7 @@
         });
         html += '</div>';
 
-        html += '<button type="button" class="es-pcal-btn-primary" data-act="reload">Make another booking</button>';
+        html += '<button type="button" class="btn-primary" data-act="reload">Make another booking</button>';
         html += '</div>';
 
         PCal.$wrap.html(html);

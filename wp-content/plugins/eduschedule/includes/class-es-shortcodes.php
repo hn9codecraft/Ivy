@@ -4,14 +4,43 @@ if ( ! defined( 'ABSPATH' ) ) exit;
 class ES_Shortcodes {
 
     public function __construct() {
+        $this->register_shortcodes();
+        // Re-register late as well. Some themes/forms plugins use very generic
+        // reset-password shortcode names and can overwrite our alias after
+        // plugins_loaded. This makes [es_reset_password_form] reliably point to
+        // the EduSchedule reset flow.
+        add_action( 'init', array( $this, 'register_shortcodes' ), 9999 );
+        add_action( 'wp_loaded', array( $this, 'register_shortcodes' ), 9999 );
+        add_filter( 'pre_do_shortcode_tag', array( $this, 'force_edu_reset_shortcode' ), 0, 4 );
+        add_action( 'wp_enqueue_scripts', array( $this, 'enqueue' ) );
+
+        // When a reset-link lands on a Reset Password page that has a theme/builder
+        // lost-password form instead of our shortcode, replace the page body with
+        // the EduSchedule reset view so ?es_action=rp always shows New Password.
+        add_filter( 'the_content', array( $this, 'maybe_force_reset_page_content' ), 1 );
+
+        // Hard route capture. This bypasses page builders or third-party forms
+        // that can still render a generic forgot-password form on reset links.
+        add_action( 'template_redirect', array( $this, 'maybe_render_direct_reset_page' ), 0 );
+    }
+
+    public function register_shortcodes() {
+        // These two names are used for the password reset page. Remove first so
+        // another form plugin/theme cannot keep ownership of them.
+        remove_shortcode( 'eduschedule_reset' );
+        remove_shortcode( 'es_reset_password_form' );
+        remove_shortcode( 'ivy_reset_password' );
+
         add_shortcode( 'eduschedule_login',        array( $this, 'login' ) );
         add_shortcode( 'eduschedule_register',     array( $this, 'register' ) );
-        add_shortcode( 'eduschedule_auth',         array( $this, 'auth' ) ); // NEW: combined login + register toggle
+        add_shortcode( 'eduschedule_auth',         array( $this, 'auth' ) );
+        add_shortcode( 'eduschedule_reset',        array( $this, 'reset' ) );
+        add_shortcode( 'es_reset_password_form',   array( $this, 'reset' ) );
+        add_shortcode( 'ivy_reset_password',       array( $this, 'reset' ) );
         add_shortcode( 'eduschedule_dashboard',    array( $this, 'dashboard' ) );
         add_shortcode( 'eduschedule_packages',     array( $this, 'packages' ) );
         add_shortcode( 'course_booking_calendar',  array( $this, 'public_calendar' ) );
-        add_shortcode( 'eduschedule_calendar',     array( $this, 'public_calendar' ) ); // alias
-        add_action( 'wp_enqueue_scripts', array( $this, 'enqueue' ) );
+        add_shortcode( 'eduschedule_calendar',     array( $this, 'public_calendar' ) );
     }
 
     public function enqueue() {
@@ -73,6 +102,9 @@ class ES_Shortcodes {
         return has_shortcode( $post->post_content, 'eduschedule_login' )
             || has_shortcode( $post->post_content, 'eduschedule_register' )
             || has_shortcode( $post->post_content, 'eduschedule_auth' )
+            || has_shortcode( $post->post_content, 'eduschedule_reset' )
+            || has_shortcode( $post->post_content, 'es_reset_password_form' )
+            || has_shortcode( $post->post_content, 'ivy_reset_password' )
             || has_shortcode( $post->post_content, 'eduschedule_dashboard' )
             || has_shortcode( $post->post_content, 'course_booking_calendar' )
             || has_shortcode( $post->post_content, 'eduschedule_calendar' );
@@ -85,6 +117,10 @@ class ES_Shortcodes {
     }
 
     public function login() {
+        // Custom password-reset views, shown on the same login page via a flag.
+        $reset_view = $this->maybe_render_reset_view();
+        if ( $reset_view !== null ) return $reset_view;
+
         if ( is_user_logged_in() ) {
             $s = ES_Helpers::settings();
             $url = ! empty( $s['dashboard_page_id'] ) ? get_permalink( $s['dashboard_page_id'] ) : home_url();
@@ -93,6 +129,311 @@ class ES_Shortcodes {
         ob_start();
         include ES_DIR . 'templates/frontend-login.php';
         return ob_get_clean();
+    }
+
+    /**
+     * If the current request carries the forgot/reset flag (?es_action=
+     * lostpassword|rp), render the custom reset view and return its HTML.
+     * Returns null when there's no reset flag, so callers fall through to their
+     * normal output. Shared by [eduschedule_login], [eduschedule_auth] and the
+     * dedicated [eduschedule_reset] page so the forgot-password flow works on
+     * any of them.
+     *
+     * @param bool $force  When true, always render (defaulting to the "request
+     *                     a link" step) even without an es_action flag. Used by
+     *                     the standalone [eduschedule_reset] shortcode.
+     */
+    public function maybe_render_reset_view( $force = false ) {
+        $es_action = $this->current_reset_action();
+
+        if ( $es_action !== 'lostpassword' && $es_action !== 'rp' ) {
+            if ( ! $force ) {
+                return null;
+            }
+            // Standalone reset page with no flag → show the request-link step.
+            $es_action = 'lostpassword';
+        }
+
+        // 'rp' (reset password) carries key + login from the email link.
+        $rp_key   = isset( $_GET['key'] )   ? sanitize_text_field( rawurldecode( wp_unslash( $_GET['key'] ) ) )   : '';
+        $rp_login = isset( $_GET['login'] ) ? sanitize_text_field( rawurldecode( wp_unslash( $_GET['login'] ) ) ) : '';
+        $rp_mode  = $es_action; // 'lostpassword' | 'rp'
+
+        $rp_notice = '';
+        $rp_error  = '';
+
+        // Non-JS fallback. The AJAX flow still works, but this keeps the form
+        // functional even if the theme delays or blocks the frontend script.
+        $this->process_reset_form_post( $rp_mode, $rp_key, $rp_login, $rp_notice, $rp_error );
+
+        // Validate the reset key up front so an expired/invalid link shows a
+        // clear message instead of a dead form. Skip validation after a
+        // successful password change because WordPress invalidates the key.
+        $rp_valid = false;
+        if ( $rp_mode === 'rp' && $rp_key && $rp_login && empty( $rp_notice ) ) {
+            $check = check_password_reset_key( $rp_key, $rp_login );
+            $rp_valid = ! is_wp_error( $check );
+        } elseif ( $rp_mode === 'rp' && ! empty( $rp_notice ) ) {
+            $rp_valid = true;
+        }
+
+        // The page to return to after success (back to login on the same page).
+        $rp_back_url = remove_query_arg( array( 'es_action', 'action', 'key', 'login' ) );
+
+        ob_start();
+        include ES_DIR . 'templates/frontend-reset.php';
+        return ob_get_clean();
+    }
+
+
+    /**
+     * Hard override for reset shortcodes.
+     *
+     * This is stronger than add_shortcode(). If another plugin/theme registers
+     * [es_reset_password_form], WordPress still fires pre_do_shortcode_tag before
+     * that callback. Returning our HTML here guarantees the reset link opens the
+     * New Password form when ?es_action=rp&key=...&login=... is present.
+     */
+    public function force_edu_reset_shortcode( $return, $tag, $attr, $m ) {
+        if ( in_array( $tag, array( 'eduschedule_reset', 'es_reset_password_form', 'ivy_reset_password' ), true ) ) {
+            return $this->maybe_render_reset_view( true );
+        }
+        return $return;
+    }
+
+    /**
+     * Normalize all reset URL variants used by WordPress and EduSchedule.
+     * Supports:
+     *   ?es_action=lostpassword
+     *   ?es_action=rp&key=...&login=...
+     *   ?action=lostpassword / ?action=rp / ?action=resetpass
+     *   ?key=...&login=... (some mail clients/plugins strip the action arg)
+     */
+    private function current_reset_action() {
+        $action = '';
+        if ( isset( $_GET['es_action'] ) ) {
+            $action = sanitize_key( wp_unslash( $_GET['es_action'] ) );
+        } elseif ( isset( $_GET['action'] ) ) {
+            $action = sanitize_key( wp_unslash( $_GET['action'] ) );
+        }
+
+        if ( in_array( $action, array( 'retrievepassword', 'lost-password', 'lost_password' ), true ) ) {
+            $action = 'lostpassword';
+        }
+        if ( in_array( $action, array( 'resetpass', 'reset-password', 'reset_password' ), true ) ) {
+            $action = 'rp';
+        }
+
+        if ( ! $action && ! empty( $_GET['key'] ) && ! empty( $_GET['login'] ) ) {
+            $action = 'rp';
+        }
+
+        return $action;
+    }
+
+    /**
+     * Replace wrong/builder lost-password forms on the Reset Password page when
+     * a reset link is opened. This directly fixes cases where /reset-password/
+     * displays a generic Forgot Password form even though the URL contains
+     * ?es_action=rp&key=...&login=....
+     */
+    /**
+     * Directly render the EduSchedule reset view for real reset-link requests.
+     * This is intentionally stronger than the_content replacement because some
+     * Elementor/theme/form pages output their own reset form outside normal
+     * shortcode rendering. It only runs on reset-style pages with reset query
+     * args, so normal site pages are not affected.
+     */
+    public function maybe_render_direct_reset_page() {
+        if ( is_admin() || wp_doing_ajax() || ( defined( 'REST_REQUEST' ) && REST_REQUEST ) ) {
+            return;
+        }
+
+        $action = $this->current_reset_action();
+        $has_reset_signal = in_array( $action, array( 'lostpassword', 'rp' ), true )
+            || ( ! empty( $_GET['key'] ) && ! empty( $_GET['login'] ) );
+
+        if ( ! $has_reset_signal || ! is_singular() ) {
+            return;
+        }
+
+        global $post;
+        if ( ! $post ) {
+            return;
+        }
+
+        $content = (string) $post->post_content;
+        $s = ES_Helpers::settings();
+        $configured_reset_id = (int) ( $s['reset_page_id'] ?? 0 );
+        $looks_like_reset_page = ( $configured_reset_id && (int) $post->ID === $configured_reset_id )
+            || in_array( $post->post_name, array( 'reset-password', 'forgot-password', 'lost-password' ), true )
+            || has_shortcode( $content, 'eduschedule_reset' )
+            || has_shortcode( $content, 'es_reset_password_form' )
+            || has_shortcode( $content, 'ivy_reset_password' )
+            || has_shortcode( $content, 'eduschedule_login' )
+            || has_shortcode( $content, 'eduschedule_auth' );
+
+        if ( ! $looks_like_reset_page ) {
+            return;
+        }
+
+        status_header( 200 );
+        nocache_headers();
+        ?>
+<!doctype html>
+<html <?php language_attributes(); ?>>
+<head>
+    <meta charset="<?php bloginfo( 'charset' ); ?>">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <?php wp_head(); ?>
+</head>
+<body <?php body_class( 'es-reset-direct-page' ); ?>>
+<?php if ( function_exists( 'wp_body_open' ) ) { wp_body_open(); } ?>
+<main id="primary" class="site-main es-reset-direct-wrap" style="max-width:640px;margin:60px auto;padding:0 20px;">
+    <?php echo $this->maybe_render_reset_view( true ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped ?>
+</main>
+<?php wp_footer(); ?>
+</body>
+</html>
+        <?php
+        exit;
+    }
+
+    public function maybe_force_reset_page_content( $content ) {
+        if ( is_admin() || ! is_singular() ) {
+            return $content;
+        }
+
+        $action = $this->current_reset_action();
+        $has_reset_signal = in_array( $action, array( 'lostpassword', 'rp' ), true )
+            || ( ! empty( $_GET['key'] ) && ! empty( $_GET['login'] ) );
+
+        if ( ! $has_reset_signal ) {
+            return $content;
+        }
+
+        global $post;
+        if ( ! $post ) {
+            return $content;
+        }
+
+        // When a real reset link is opened, render the EduSchedule reset
+        // form directly at the_content priority 1. This avoids shortcode-name
+        // conflicts and page-builder/forms plugins that keep showing their own
+        // generic Forgot Password form even though ?es_action=rp is present.
+        if ( has_shortcode( $content, 'eduschedule_reset' ) || has_shortcode( $content, 'es_reset_password_form' ) || has_shortcode( $content, 'ivy_reset_password' ) || has_shortcode( $content, 'eduschedule_login' ) || has_shortcode( $content, 'eduschedule_auth' ) ) {
+            return $this->maybe_render_reset_view( true );
+        }
+
+        $s = ES_Helpers::settings();
+        $configured_reset_id = (int) ( $s['reset_page_id'] ?? 0 );
+        $looks_like_reset_page = ( $configured_reset_id && (int) $post->ID === $configured_reset_id )
+            || in_array( $post->post_name, array( 'reset-password', 'forgot-password', 'lost-password' ), true );
+
+        if ( ! $looks_like_reset_page ) {
+            return $content;
+        }
+
+        return $this->maybe_render_reset_view( true );
+    }
+
+    /**
+     * Server-side fallback for reset forms. AJAX remains the default, but this
+     * protects the flow when frontend JavaScript is not running.
+     */
+    private function process_reset_form_post( &$rp_mode, &$rp_key, &$rp_login, &$rp_notice, &$rp_error ) {
+        if ( empty( $_POST ) ) return;
+
+        if ( isset( $_POST['es_lost_password_submit'] ) ) {
+            if ( empty( $_POST['es_reset_nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['es_reset_nonce'] ) ), 'es_frontend_reset' ) ) {
+                $rp_error = 'Security check failed. Please refresh and try again.';
+                return;
+            }
+
+            $login = isset( $_POST['email'] ) ? sanitize_text_field( wp_unslash( $_POST['email'] ) ) : '';
+            if ( $login === '' ) {
+                $rp_error = 'Please enter your email address or username.';
+                return;
+            }
+
+            $user = is_email( $login ) ? get_user_by( 'email', $login ) : get_user_by( 'login', $login );
+            $generic = 'If that account exists, a password reset link has been sent. Please check your inbox and spam folder.';
+
+            if ( $user ) {
+                $key = get_password_reset_key( $user );
+                if ( ! is_wp_error( $key ) ) {
+                    $reset_link = add_query_arg( array(
+                        'es_action' => 'rp',
+                        'key'       => rawurlencode( $key ),
+                        'login'     => rawurlencode( $user->user_login ),
+                    ), ES_Helpers::reset_page_url() );
+                    if ( class_exists( 'ES_Mailer' ) ) {
+                        ES_Mailer::send_password_reset( $user, $reset_link );
+                    } else {
+                        wp_mail( $user->user_email, 'Reset your password', $reset_link );
+                    }
+                }
+            }
+
+            $rp_mode   = 'lostpassword';
+            $rp_notice = $generic;
+            return;
+        }
+
+        if ( isset( $_POST['es_reset_password_submit'] ) ) {
+            if ( empty( $_POST['es_reset_nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_POST['es_reset_nonce'] ) ), 'es_frontend_reset' ) ) {
+                $rp_error = 'Security check failed. Please refresh and try again.';
+                return;
+            }
+
+            $rp_key   = isset( $_POST['key'] )   ? sanitize_text_field( wp_unslash( $_POST['key'] ) )   : $rp_key;
+            $rp_login = isset( $_POST['login'] ) ? sanitize_text_field( wp_unslash( $_POST['login'] ) ) : $rp_login;
+            $pass1    = isset( $_POST['password'] ) ? (string) wp_unslash( $_POST['password'] ) : '';
+            $pass2    = isset( $_POST['password_confirm'] ) ? (string) wp_unslash( $_POST['password_confirm'] ) : '';
+
+            $rp_mode = 'rp';
+
+            if ( $rp_key === '' || $rp_login === '' ) {
+                $rp_error = 'This reset link is invalid. Please request a new one.';
+                return;
+            }
+            if ( strlen( $pass1 ) < 6 ) {
+                $rp_error = 'Password must be at least 6 characters.';
+                return;
+            }
+            if ( $pass1 !== $pass2 ) {
+                $rp_error = 'The two passwords do not match.';
+                return;
+            }
+
+            $user = check_password_reset_key( $rp_key, $rp_login );
+            if ( is_wp_error( $user ) ) {
+                $rp_error = 'This reset link has expired or is invalid. Please request a new one.';
+                return;
+            }
+
+            reset_password( $user, $pass1 );
+            $rp_notice = 'Your password has been reset successfully. You can now log in.';
+        }
+    }
+
+    /**
+     * Standalone forgot/reset-password page. Place [eduschedule_reset] on a
+     * dedicated page to host the whole self-service reset flow (request link →
+     * branded email → set new password) entirely within the plugin, without
+     * depending on the login page. Logged-in users are gently bounced to their
+     * dashboard unless they're actively following a reset link.
+     */
+    public function reset() {
+        $es_action = $this->current_reset_action();
+
+        if ( is_user_logged_in() && $es_action !== 'rp' && $es_action !== 'lostpassword' ) {
+            $s   = ES_Helpers::settings();
+            $url = ! empty( $s['dashboard_page_id'] ) ? get_permalink( $s['dashboard_page_id'] ) : home_url();
+            return '<div class="es-fe es-redirect"><p>You are already logged in. <a href="' . esc_url( $url ) . '">Go to dashboard →</a></p></div>';
+        }
+
+        return $this->maybe_render_reset_view( true );
     }
 
     public function register() {
@@ -125,6 +466,10 @@ class ES_Shortcodes {
             'logged_in_message'  => '',
             'show_logged_in_box' => 'yes',
         ), $atts, 'eduschedule_auth' );
+
+        // Custom forgot/reset-password views work on the auth shortcode too.
+        $reset_view = $this->maybe_render_reset_view();
+        if ( $reset_view !== null ) return $reset_view;
 
         if ( is_user_logged_in() ) {
             if ( $atts['show_logged_in_box'] !== 'yes' ) return '';
@@ -171,7 +516,7 @@ class ES_Shortcodes {
             'yearly_toggle'       => '',
             'default_cycle'       => 'monthly',
             'monthly_label'       => 'Pay Monthly',
-            'semester_label'      => 'Pay per Semester',
+            'semester_label'      => 'Pay Yearly',
             'period_unit'         => 'month',
             'period_unit_yearly'  => 'semester',
             'brand_name'          => '',

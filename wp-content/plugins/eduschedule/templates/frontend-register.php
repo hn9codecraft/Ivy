@@ -46,6 +46,14 @@
                 </div>
             </div>
 
+            <div class="es-fe-field">
+                <label class="es-fe-label">CONFIRM PASSWORD</label>
+                <div class="es-fe-pw-wrap">
+                    <input type="password" name="confirm_password" required minlength="8" placeholder="Re-enter your password" autocomplete="new-password" />
+                    <button type="button" class="es-fe-eye" aria-label="Toggle password"><span class="dashicons dashicons-visibility"></span></button>
+                </div>
+            </div>
+
             <button type="submit" class="es-fe-btn es-fe-btn-primary">Create Account →</button>
 
             <div class="es-fe-msg" id="es-register-msg" style="display:none"></div>

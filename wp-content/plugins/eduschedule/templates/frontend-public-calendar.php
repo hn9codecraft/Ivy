@@ -34,7 +34,7 @@ $allow_multi = isset( $atts['allow_multi'] ) ? ( $atts['allow_multi'] === 'yes' 
      <?php endif; ?>>
 
     <h2 class="es-pcal-title"><?php echo esc_html( $atts['title'] ); ?></h2>
-    <?php if ( ! empty( $atts['subtitle'] ) ) : ?>
+    <!-- <?php if ( ! empty( $atts['subtitle'] ) ) : ?>
         <p class="es-pcal-subtitle"><?php echo esc_html( $atts['subtitle'] ); ?></p>
     <?php endif; ?>
 
@@ -49,7 +49,7 @@ $allow_multi = isset( $atts['allow_multi'] ) ? ( $atts['allow_multi'] === 'yes' 
             <?php endforeach; ?>
             <span class="es-pcal-legend-tz">Times in <strong><?php echo esc_html( $tz->getName() ); ?></strong></span>
         </div>
-    <?php endif; ?>
+    <?php endif; ?> -->
 
     <div class="es-pcal-step-wrap" data-step="1">
         <div class="es-pcal-loading">Loading…</div>

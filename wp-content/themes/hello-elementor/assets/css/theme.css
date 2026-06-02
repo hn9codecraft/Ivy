@@ -69,6 +69,7 @@ ol, ul {
 
 p, h1, h2, h3, h4, h5, h6 {
   overflow-wrap: break-word;
+  margin-bottom: 16px;
 }
 
 table {
@@ -107,12 +108,12 @@ input[type="search"]::-webkit-search-decoration {
   --color-primary-border:  rgba(227, 38, 82, 0.35);
 
   /* Background Scale */
-  --color-bg:              #010717;
-  --color-bg-secondary:    #070d1f;
-  --color-bg-card:         #0b1223;
-  --color-bg-card-hover:   #0f1a30;
-  --color-bg-elevated:     #111827;
-  --color-bg-input:        #0d1526;
+  --color-bg:              #6F6F6F10;
+  --color-bg-secondary:    #6F6F6F10;
+  --color-bg-card:         #6F6F6F10;
+  --color-bg-card-hover:   #6F6F6F05;
+  --color-bg-elevated:     #6F6F6F10;
+  --color-bg-input:        #6F6F6F10;
   --color-bg-overlay:      rgba(1, 7, 23, 0.85);
 
   /* Borders */
@@ -518,7 +519,10 @@ blockquote cite {
   padding-inline: var(--btn-sm-px);
   font-size: var(--btn-sm-fs);
 }
-
+button.btn-remove {
+    padding: 5px !important;
+    font-size: 10px !important;
+}
 .btn-lg {
   height: var(--btn-lg-h);
   padding-inline: var(--btn-lg-px);
@@ -543,6 +547,7 @@ blockquote cite {
   border-color: var(--color-primary);
   color: #ffffff;
   box-shadow: var(--shadow-primary);
+  outline:none !important;
 }
 
 .btn-primary:hover,
@@ -553,7 +558,11 @@ blockquote cite {
   transform: translateY(-2px);
   color: #ffffff;
 }
-
+.btn-primary:focus,
+.btn-solid:focus,button, input{
+   outline:none !important;
+   box-shadow:none ;
+}
 .btn-primary:active,
 .btn-solid:active {
   background-color: var(--color-primary-active);
@@ -623,18 +632,18 @@ blockquote cite {
 
 /* ── Link ── */
 .btn-link {
-  background: none;
+  background: none !important;
   border: none;
   color: var(--color-primary);
   height: auto;
   padding: 0;
   letter-spacing: normal;
   box-shadow: none;
+  padding:0px !important
 }
 
 .btn-link:hover {
-  color: var(--color-primary-hover);
-  transform: none;
+  color: var(--color-primary-hover) !important;
 }
 
 
@@ -1268,3 +1277,5 @@ table.table { width: 100%; font-size: var(--text-sm); }
 /* Visibility */
 @media (max-width: 768px)  { .hide-mobile  { display: none !important; } }
 @media (min-width: 769px)  { .hide-desktop { display: none !important; } }
+
+

@@ -12,6 +12,7 @@ class ES_Admin {
         add_action( 'admin_post_es_save_settings', array( $this, 'save_settings' ) );
         add_action( 'admin_post_es_create_pages',  array( $this, 'create_pages' ) );
         add_action( 'admin_post_es_delete_booking', array( $this, 'delete_booking' ) );
+        add_action( 'admin_post_es_reset_student_data', array( $this, 'reset_student_data' ) );
     }
 
     public function menu() {
@@ -25,6 +26,7 @@ class ES_Admin {
         add_submenu_page( 'eduschedule', 'Calendar',         'Calendar',         $cap, 'eduschedule',           array( $this, 'page_calendar' ) );
         add_submenu_page( 'eduschedule', 'My Slots',         'My Slots',         $cap, 'eduschedule-slots',     array( $this, 'page_slots' ) );
         add_submenu_page( 'eduschedule', 'All Bookings',     'All Bookings',     $cap, 'eduschedule-bookings',  array( $this, 'page_bookings' ) );
+        add_submenu_page( 'eduschedule', 'Payments',         'Payments',         $cap, 'eduschedule-payments',  array( $this, 'page_payments' ) );
         add_submenu_page( 'eduschedule', 'Students',         'Students',         $cap, 'eduschedule-students',  array( $this, 'page_students' ) );
         //add_submenu_page( 'eduschedule', 'Demo Leads',       'Demo Leads',       $cap, 'eduschedule-demo-leads', array( $this, 'page_demo_leads' ) );
         add_submenu_page( 'eduschedule', '1:1 Students',     '1:1 Students',     $cap, 'eduschedule-1to1',      array( $this, 'page_one_to_one' ) );
@@ -37,9 +39,22 @@ class ES_Admin {
     public function enqueue( $hook ) {
         if ( strpos( $hook, 'eduschedule' ) === false ) return;
         wp_enqueue_style( 'dashicons' );
+
+        // Select2 — used for the Course multi-select on the 1:1 & Group pages.
+        // Loaded from a CDN (consistent with how Stripe.js is loaded on the
+        // front end). If the CDN is blocked the page falls back to a plain
+        // multi-select, which still works.
+        wp_enqueue_style( 'es-select2', 'https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/css/select2.min.css', array(), '4.0.13' );
+        wp_enqueue_script( 'es-select2', 'https://cdnjs.cloudflare.com/ajax/libs/select2/4.0.13/js/select2.min.js', array( 'jquery' ), '4.0.13', true );
+
         wp_enqueue_style( 'es-admin', ES_URL . 'public/css/admin.css', array( 'dashicons' ), ES_VERSION );
+
+        // Load the WordPress media uploader so admins can upload / pick videos
+        // (and other media) straight from the media library (#4 — Videos tab).
+        wp_enqueue_media();
+
         wp_enqueue_script( 'es-admin', ES_URL . 'public/js/admin.js', array( 'jquery' ), ES_VERSION, true );
-        wp_enqueue_script( 'es-packages', ES_URL . 'public/js/packages.js', array( 'jquery', 'es-admin' ), ES_VERSION, true );
+        wp_enqueue_script( 'es-packages', ES_URL . 'public/js/packages.js', array( 'jquery', 'es-admin', 'es-select2' ), ES_VERSION, true );
 
         wp_localize_script( 'es-admin', 'ES_ADMIN', array(
             'ajax_url'   => admin_url( 'admin-ajax.php' ),
@@ -70,6 +85,16 @@ class ES_Admin {
         );
         $bookings = ES_DB::get_bookings_for_admin( $args );
         include ES_DIR . 'templates/admin-bookings.php';
+    }
+
+    public function page_payments() {
+        if ( ! current_user_can( ES_Helpers::admin_capability() ) ) return;
+        $args = array(
+            'status' => isset( $_GET['status'] ) ? sanitize_text_field( wp_unslash( $_GET['status'] ) ) : 'paid',
+            'search' => isset( $_GET['s'] )      ? sanitize_text_field( wp_unslash( $_GET['s'] ) )      : '',
+        );
+        $payments = ES_Packages::get_all_payments( $args );
+        include ES_DIR . 'templates/admin-payments.php';
     }
 
     public function page_zoom() {
@@ -115,7 +140,7 @@ class ES_Admin {
         $users    = ES_Packages::get_users_by_category( '1to1' );
         $selected = $uid ? get_userdata( $uid ) : null;
 
-        if ( $selected && ES_Packages::get_user_category( $uid ) !== '1to1' ) {
+        if ( $selected && ! ES_Packages::user_has_flow( $uid, '1to1' ) ) {
             $selected = null;
             $uid = 0;
         }
@@ -321,6 +346,9 @@ class ES_Admin {
         $yearly_discount = isset( $_POST['yearly_discount'] ) ? floatval( $_POST['yearly_discount'] ) : 0;
         $yearly_discount = max( 0, min( 100, $yearly_discount ) );
 
+        $yearly_discount_months = isset( $_POST['yearly_discount_months'] ) ? (int) $_POST['yearly_discount_months'] : 12;
+        $yearly_discount_months = max( 1, min( 60, $yearly_discount_months ) );
+
         // Stripe
         $stripe_mode = isset( $_POST['stripe_mode'] ) ? sanitize_text_field( wp_unslash( $_POST['stripe_mode'] ) ) : 'test';
         if ( ! in_array( $stripe_mode, array( 'test', 'live' ), true ) ) $stripe_mode = 'test';
@@ -332,6 +360,17 @@ class ES_Admin {
         $kept_live_secret    = ( isset( $_POST['stripe_live_secret'] )    && $_POST['stripe_live_secret']    !== '' ) ? sanitize_text_field( wp_unslash( $_POST['stripe_live_secret'] ) )    : $current['stripe_live_secret'];
         $kept_webhook_secret = ( isset( $_POST['stripe_webhook_secret'] ) && $_POST['stripe_webhook_secret'] !== '' ) ? sanitize_text_field( wp_unslash( $_POST['stripe_webhook_secret'] ) ) : $current['stripe_webhook_secret'];
 
+        // SMTP password: keep the stored value if the field was left blank.
+        $kept_smtp_password = ( isset( $_POST['smtp_password'] ) && $_POST['smtp_password'] !== '' )
+            ? trim( (string) wp_unslash( $_POST['smtp_password'] ) )
+            : ( isset( $current['smtp_password'] ) ? $current['smtp_password'] : '' );
+
+        $smtp_encryption = isset( $_POST['smtp_encryption'] ) ? sanitize_text_field( wp_unslash( $_POST['smtp_encryption'] ) ) : 'tls';
+        if ( ! in_array( $smtp_encryption, array( 'tls', 'ssl', 'none' ), true ) ) $smtp_encryption = 'tls';
+
+        $smtp_port = isset( $_POST['smtp_port'] ) ? (int) $_POST['smtp_port'] : 587;
+        if ( $smtp_port < 1 || $smtp_port > 65535 ) $smtp_port = 587;
+
         update_option( 'es_settings', array_merge( $current, array(
             'site_name'        => isset( $_POST['site_name'] ) ? sanitize_text_field( wp_unslash( $_POST['site_name'] ) ) : get_bloginfo( 'name' ),
             'work_country'     => $work_country,
@@ -342,11 +381,13 @@ class ES_Admin {
             'login_page_id'    => isset( $_POST['login_page_id'] ) ? (int) $_POST['login_page_id'] : 0,
             'register_page_id' => isset( $_POST['register_page_id'] ) ? (int) $_POST['register_page_id'] : 0,
             'dashboard_page_id'=> isset( $_POST['dashboard_page_id'] ) ? (int) $_POST['dashboard_page_id'] : 0,
+            'reset_page_id'    => isset( $_POST['reset_page_id'] ) ? (int) $_POST['reset_page_id'] : 0,
 
             // Currency / Billing
             'default_currency' => $default_currency,
-            'yearly_discount'  => $yearly_discount,
-            'enable_yearly'    => ! empty( $_POST['enable_yearly'] ) ? 1 : 0,
+            'yearly_discount'        => $yearly_discount,
+            'yearly_discount_months' => $yearly_discount_months,
+            'enable_yearly'          => ! empty( $_POST['enable_yearly'] ) ? 1 : 0,
 
             // Stripe
             'stripe_enabled'        => ! empty( $_POST['stripe_enabled'] ) ? 1 : 0,
@@ -356,7 +397,28 @@ class ES_Admin {
             'stripe_live_pub_key'   => isset( $_POST['stripe_live_pub_key'] ) ? sanitize_text_field( wp_unslash( $_POST['stripe_live_pub_key'] ) ) : '',
             'stripe_live_secret'    => $kept_live_secret,
             'stripe_webhook_secret' => $kept_webhook_secret,
+
+            // Email / Notifications
+            'from_name'          => isset( $_POST['from_name'] ) ? sanitize_text_field( wp_unslash( $_POST['from_name'] ) ) : get_bloginfo( 'name' ),
+            'from_email'         => isset( $_POST['from_email'] ) ? sanitize_email( wp_unslash( $_POST['from_email'] ) ) : '',
+            'reply_to'           => isset( $_POST['reply_to'] ) ? sanitize_email( wp_unslash( $_POST['reply_to'] ) ) : '',
+            'notify_admin'       => ! empty( $_POST['notify_admin'] ) ? 1 : 0,
+            'admin_notify_email' => isset( $_POST['admin_notify_email'] ) ? sanitize_email( wp_unslash( $_POST['admin_notify_email'] ) ) : '',
+
+            // SMTP
+            'smtp_enabled'    => ! empty( $_POST['smtp_enabled'] ) ? 1 : 0,
+            'smtp_host'       => isset( $_POST['smtp_host'] ) ? sanitize_text_field( wp_unslash( $_POST['smtp_host'] ) ) : '',
+            'smtp_port'       => $smtp_port,
+            'smtp_encryption' => $smtp_encryption,
+            'smtp_auth'       => ! empty( $_POST['smtp_auth'] ) ? 1 : 0,
+            'smtp_username'   => isset( $_POST['smtp_username'] ) ? sanitize_text_field( wp_unslash( $_POST['smtp_username'] ) ) : '',
+            'smtp_password'   => $kept_smtp_password,
         ) ) );
+
+        // Login/register/dashboard page IDs may have changed — bust the cached
+        // page-URL lookups so the reset/login flow resolves immediately.
+        delete_transient( 'es_login_page_url' );
+        delete_transient( 'es_reset_page_url' );
 
         wp_safe_redirect( admin_url( 'admin.php?page=eduschedule-settings&saved=1' ) );
         exit;
@@ -386,9 +448,105 @@ class ES_Admin {
                 $created[] = $info['title'];
             }
         }
+
+        // Dedicated self-service password-reset page. We try to track its ID
+        // in the reset_page_id setting (v4.4.2). If none exists yet, create it.
+        $has_reset_page = false;
+        if ( ! empty( $settings['reset_page_id'] ) && ( $rp = get_post( (int) $settings['reset_page_id'] ) ) && $rp->post_status === 'publish' ) {
+            $has_reset_page = true;
+        } else {
+            foreach ( get_posts( array( 'post_type' => 'page', 'post_status' => 'publish', 'numberposts' => 100, 'fields' => 'ids' ) ) as $pid ) {
+                if ( has_shortcode( get_post_field( 'post_content', $pid ), 'eduschedule_reset' ) || has_shortcode( get_post_field( 'post_content', $pid ), 'es_reset_password_form' ) ) {
+                    $settings['reset_page_id'] = $pid;
+                    $has_reset_page = true;
+                    break;
+                }
+            }
+        }
+        if ( ! $has_reset_page ) {
+            $rid = wp_insert_post( array(
+                'post_title'   => 'Reset Password',
+                'post_content' => '[eduschedule_reset]',
+                'post_status'  => 'publish',
+                'post_type'    => 'page',
+            ) );
+            if ( $rid && ! is_wp_error( $rid ) ) {
+                $settings['reset_page_id'] = $rid;
+                $created[] = 'Reset Password';
+            }
+        }
+
         update_option( 'es_settings', $settings );
+        // New auth pages may have been created — bust the cached lookups so the
+        // reset/login flow resolves the new pages immediately.
+        delete_transient( 'es_login_page_url' );
+        delete_transient( 'es_reset_page_url' );
         $msg = $created ? 'Created: ' . implode( ', ', $created ) : 'Pages already exist';
         wp_safe_redirect( admin_url( 'admin.php?page=eduschedule-settings&pages=' . urlencode( $msg ) ) );
+        exit;
+    }
+
+
+    /**
+     * Danger-zone reset: remove EduSchedule operational student/group data while
+     * preserving WordPress users and package master records.
+     */
+    public function reset_student_data() {
+        if ( ! current_user_can( ES_Helpers::admin_capability() ) ) wp_die( 'Forbidden' );
+        check_admin_referer( 'es_reset_student_data' );
+
+        $confirm = isset( $_POST['es_reset_confirm'] ) ? strtoupper( trim( sanitize_text_field( wp_unslash( $_POST['es_reset_confirm'] ) ) ) ) : '';
+        if ( $confirm !== 'RESET' ) {
+            wp_safe_redirect( admin_url( 'admin.php?page=eduschedule-settings&reset_error=confirm' ) );
+            exit;
+        }
+
+        global $wpdb;
+
+        $tables_to_clear = array(
+            'es_bookings',
+            'es_slots',
+            'es_payments',
+            'es_lead_packages',
+            'es_groups',
+            'es_group_members',
+            'es_session_files',
+            'es_attendance',
+            'es_videos',
+        );
+
+        foreach ( $tables_to_clear as $table ) {
+            $full = $wpdb->prefix . $table;
+            $exists = $wpdb->get_var( $wpdb->prepare( 'SHOW TABLES LIKE %s', $full ) );
+            if ( $exists === $full ) {
+                $wpdb->query( "DELETE FROM `{$full}`" );
+                $wpdb->query( "ALTER TABLE `{$full}` AUTO_INCREMENT = 1" );
+            }
+        }
+
+        // Keep WP users, but remove EduSchedule student/group assignment/meta so
+        // existing users can be converted again from a clean state.
+        $meta_keys = array(
+            ES_Packages::META_CATEGORY,
+            ES_Packages::META_PACKAGE_ID,
+            ES_Packages::META_GROUP_ID,
+            ES_Packages::META_TOKEN,
+            ES_Packages::META_TOKEN_EXP,
+            ES_Packages::META_STAGED,
+            'es_phone',
+            'es_parent',
+            'es_parent_name',
+            'es_reference',
+            'es_source',
+            'es_goal',
+            'es_band',
+            'es_notes',
+        );
+        foreach ( $meta_keys as $meta_key ) {
+            delete_metadata( 'user', 0, $meta_key, '', true );
+        }
+
+        wp_safe_redirect( admin_url( 'admin.php?page=eduschedule-settings&reset_done=1' ) );
         exit;
     }
 

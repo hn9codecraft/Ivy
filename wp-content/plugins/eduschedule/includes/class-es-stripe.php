@@ -124,8 +124,27 @@ class ES_Stripe {
         // Record pending payment
         global $wpdb;
         $now = current_time( 'mysql' );
-        $wpdb->insert( $wpdb->prefix . 'es_payments', array(
+        $snap = self::payment_session_snapshot( $pkg, $billing_cycle );
+        $flow_type = ES_Packages::get_staged_flow( $user_id );
+        $latest    = ES_Packages::get_latest_lead_outcome( $user_id );
+        $group_id  = ( $flow_type === 'group' && $latest && ! empty( $latest->group_id ) ) ? (int) $latest->group_id : 0;
+        if ( $group_id ) {
+            $course_ids  = ES_Packages::get_group_course_ids( $group_id );
+            $course_id   = ES_Packages::first_course_id( $course_ids );
+            $course_name = ES_Packages::course_names_str( $course_ids );
+            if ( $course_name === '' && $latest && ! empty( $latest->course_name ) ) $course_name = $latest->course_name;
+        } else {
+            $flow_type   = '1to1';
+            $course_ids  = ES_Packages::get_student_course_ids( $user_id );
+            $course_id   = ES_Packages::first_course_id( $course_ids );
+            $course_name = ES_Packages::course_name( $course_id );
+        }
+        $wpdb->insert( $wpdb->prefix . 'es_payments', array_merge( array(
             'user_id'            => $user_id,
+            'course_id'          => $course_id ?: null,
+            'course_name'        => $course_name,
+            'flow_type'          => $flow_type,
+            'group_id'           => $group_id ?: null,
             'package_id'         => $package_id,
             'amount'             => $amount,
             'currency'           => $currency,
@@ -133,10 +152,10 @@ class ES_Stripe {
             'gateway'            => 'stripe',
             'gateway_session_id' => $resp['id'],
             'status'             => 'pending',
-            'meta'               => wp_json_encode( array( 'created_via' => 'checkout_session' ) ),
+            'meta'               => wp_json_encode( array( 'created_via' => 'checkout_session', 'flow_type' => $flow_type, 'group_id' => $group_id ) ),
             'created_at'         => $now,
             'updated_at'         => $now,
-        ) );
+        ), $snap ) );
 
         return array( 'url' => $resp['url'], 'session_id' => $resp['id'] );
     }
@@ -225,7 +244,8 @@ class ES_Stripe {
         // Record pending payment (user_id may be 0 — filled in on finalize).
         global $wpdb;
         $now = current_time( 'mysql' );
-        $wpdb->insert( $wpdb->prefix . 'es_payments', array(
+        $snap = self::payment_session_snapshot( $pkg, $billing_cycle );
+        $wpdb->insert( $wpdb->prefix . 'es_payments', array_merge( array(
             'user_id'            => $user_id,
             'package_id'         => $package_id,
             'amount'             => $amount,
@@ -241,9 +261,34 @@ class ES_Stripe {
             ) ),
             'created_at'         => $now,
             'updated_at'         => $now,
-        ) );
+        ), $snap ) );
 
         return array( 'url' => $resp['url'], 'session_id' => $resp['id'] );
+    }
+
+    /**
+     * Effective term (in months) that a billing cycle bills + grants.
+     *
+     * - monthly cycle  → the package's own duration (`months`).
+     * - yearly/discounted cycle (v4.3.3) → the package's configured
+     *   `discount_months`. This is the change requested: when the year/discount
+     *   toggle is ON the plan is billed for the discount months (e.g. 5 months),
+     *   NOT the package's default duration. If no discount_months is configured
+     *   we fall back to the package's own months so nothing breaks.
+     *
+     * Everything that needs "how many months does this purchase cover" — the
+     * charged amount, the granted access window (valid_until) and the session
+     * snapshot — funnels through here so the three can never drift apart.
+     */
+    public static function effective_term_months( $pkg, $billing_cycle = 'monthly' ) {
+        $pkg_months = max( 1, (int) ( $pkg->months ?? 1 ) );
+        if ( $billing_cycle !== 'yearly' ) {
+            return $pkg_months;
+        }
+        $disc_months = (int) ( $pkg->discount_months ?? 0 );
+        // Clamp to the package's own duration and fall back to it when unset.
+        $disc_months = max( 0, min( $pkg_months, $disc_months ) );
+        return $disc_months > 0 ? $disc_months : $pkg_months;
     }
 
     /**
@@ -252,24 +297,159 @@ class ES_Stripe {
      * - yearly:  if yearly_price > 0, use it; otherwise price * 12 with optional global yearly_discount %
      */
     public static function resolve_price( $pkg, $billing_cycle = 'monthly' ) {
+        // ── New monthly model ──
+        // The package's `price` column already holds the FULL total
+        // (monthly_price × months). We charge that full amount up front.
+        $months        = max( 1, (int) ( $pkg->months ?? 1 ) );
+        $monthly_price = (float) ( $pkg->monthly_price ?? 0 );
+
+        if ( $monthly_price > 0 ) {
+            $total = (float) $pkg->price;
+            if ( $total <= 0 ) {
+                $total = round( $monthly_price * $months, 2 );
+            }
+
+            // Discounted ("yearly") cycle (v4.3.3):
+            //   Bill ONLY for the configured discount_months at the monthly rate,
+            //   then subtract the discount on those same months:
+            //     term  = discount_months (falls back to package months if unset)
+            //     total = (term × monthly) − (monthly × discount_months × discount% / 100)
+            //   e.g. 12-month package @ 20000/mo, "5 discount months", 20% off:
+            //     5 × 20000 − (20000 × 5 × 20)/100 = 100000 − 20000 = 80000
+            //   The student is billed for — and receives access/sessions for —
+            //   the discount months, not the package's full default duration.
+            if ( $billing_cycle === 'yearly' ) {
+                $year_months = self::effective_term_months( $pkg, 'yearly' ); // = discount_months (or pkg months fallback)
+                $discount    = max( 0, min( 100, (float) ( $pkg->discount_percent ?? 0 ) ) );
+                $disc_months = max( 0, min( $months, (int) ( $pkg->discount_months ?? 0 ) ) );
+
+                $gross    = $monthly_price * $year_months;
+                $discount_amount = ( $discount > 0 && $disc_months > 0 )
+                    ? ( $monthly_price * $disc_months * $discount / 100 )
+                    : 0;
+                $total = round( max( 0, $gross - $discount_amount ), 2 );
+            }
+            return $total;
+        }
+
+        // ── Legacy fallback (packages created before the monthly update) ──
         $price = (float) $pkg->price;
 
         if ( $billing_cycle !== 'yearly' ) {
             return $price;
         }
 
-        // Yearly mode
         $yearly = isset( $pkg->yearly_price ) ? (float) $pkg->yearly_price : 0;
         if ( $yearly > 0 ) {
             return $yearly;
         }
 
-        // Compute from monthly * 12 with global discount
-        $s = ES_Helpers::settings();
-        $discount = max( 0, min( 100, (float) ( $s['yearly_discount'] ?? 0 ) ) );
-        $gross = $price * 12;
-        $net   = $gross * ( 1 - ( $discount / 100 ) );
-        return round( $net, 2 );
+        // Legacy discounted purchase: bill ONLY the discount_months at the
+        // monthly rate, discount applied to those months (same model as above).
+        $year_months = self::effective_term_months( $pkg, 'yearly' );
+        $discount    = max( 0, min( 100, (float) ( $pkg->discount_percent ?? 0 ) ) );
+        $disc_months = max( 0, min( $months, (int) ( $pkg->discount_months ?? 0 ) ) );
+        if ( $discount > 0 && $disc_months > 0 ) {
+            $gross           = $price * $year_months;
+            $discount_amount = $price * $disc_months * $discount / 100;
+            return round( max( 0, $gross - $discount_amount ), 2 );
+        }
+        // No discount configured → bill the effective term at the monthly rate.
+        return round( $price * $year_months, 2 );
+    }
+
+    /**
+     * Number of months the "yearly" / discounted cycle bills for. As of v4.3.3
+     * the discounted toggle bills the package's DISCOUNT months (so a 12-month
+     * package with "5 discount months" is billed + granted for 5 months). The
+     * legacy no-arg call returns 12 for safety.
+     */
+    public static function yearly_billed_months( $pkg = null ) {
+        if ( $pkg ) {
+            return self::effective_term_months( $pkg, 'yearly' );
+        }
+        return 12;
+    }
+
+    /**
+     * Build the session-term snapshot to store on a payment row at creation
+     * time, so later package edits don't change what a student already bought.
+     *
+     * @param object $pkg            The package row.
+     * @param string $billing_cycle  'monthly' grants the package's own months;
+     *                               'yearly' grants the discount months (v4.3.3).
+     */
+    public static function payment_session_snapshot( $pkg, $billing_cycle = 'monthly' ) {
+        $monthly_price = (float) ( $pkg->monthly_price ?? 0 );
+        if ( $monthly_price <= 0 ) {
+            // Legacy package: stored price was the monthly figure.
+            $monthly_price = (float) $pkg->price;
+        }
+        $monthly_limit  = (int) ( $pkg->monthly_session_limit ?? 0 );
+
+        // v4.3.3: a monthly purchase grants the package's OWN duration; a
+        // discounted ("yearly") purchase grants only the DISCOUNT months — the
+        // same term it is billed for. effective_term_months() is the single
+        // source of truth so price, access window and sessions stay in lockstep.
+        $months = self::effective_term_months( $pkg, $billing_cycle );
+
+        // Work out the total sessions granted. Prefer monthly_limit × months.
+        // If no monthly limit is set, fall back to the package's stored
+        // total_sessions.
+        $pkg_total = (int) ( $pkg->total_sessions ?? 0 );
+        if ( $monthly_limit > 0 ) {
+            $total_sessions = $monthly_limit * $months;
+        } elseif ( $pkg_total > 0 ) {
+            $total_sessions = $pkg_total;
+        } else {
+            $total_sessions = 0;
+        }
+
+        return array(
+            'package_name'          => $pkg->package_name ?? '',
+            'monthly_price'         => $monthly_price,
+            'months'                => $months,
+            'monthly_session_limit' => $monthly_limit,
+            'total_sessions'        => $total_sessions,
+            'used_sessions'         => 0,
+        );
+    }
+
+    /**
+     * Safety net: if a payment row somehow ended up with total_sessions = 0
+     * (e.g. it was created before the snapshot logic was fixed, or the package
+     * had no session limit at the time), backfill the session terms from the
+     * package now, at the moment the payment is confirmed. This guarantees a
+     * paid student actually receives their sessions. Returns the (possibly
+     * updated) row.
+     */
+    public static function backfill_sessions_if_missing( $row ) {
+        if ( ! $row ) return $row;
+        if ( (int) ( $row->total_sessions ?? 0 ) > 0 ) return $row; // already fine
+
+        $pkg = ES_Packages::get( $row->package_id );
+        if ( ! $pkg ) return $row;
+
+        $snap = self::payment_session_snapshot( $pkg, $row->billing_cycle ?: 'monthly' );
+        if ( (int) $snap['total_sessions'] <= 0 ) return $row; // nothing to grant
+
+        global $wpdb;
+        $wpdb->update(
+            $wpdb->prefix . 'es_payments',
+            array(
+                'months'                => (int) $snap['months'],
+                'monthly_session_limit' => (int) $snap['monthly_session_limit'],
+                'total_sessions'        => (int) $snap['total_sessions'],
+                'updated_at'            => current_time( 'mysql' ),
+            ),
+            array( 'id' => (int) $row->id )
+        );
+
+        // Reflect on the in-memory row too.
+        $row->months                = (int) $snap['months'];
+        $row->monthly_session_limit = (int) $snap['monthly_session_limit'];
+        $row->total_sessions        = (int) $snap['total_sessions'];
+        return $row;
     }
 
     /* ============================================================
@@ -282,7 +462,7 @@ class ES_Stripe {
      *
      * @return array|WP_Error  ['client_secret' => ..., 'amount' => ..., 'currency' => ..., 'payment_intent_id' => ...]
      */
-    public static function create_payment_intent( $user_id, $package_id, $billing_cycle = 'monthly', $name = '', $email = '' ) {
+    public static function create_payment_intent( $user_id, $package_id, $billing_cycle = 'monthly', $name = '', $email = '', $addr = array() ) {
         if ( ! self::is_enabled() ) {
             return new WP_Error( 'stripe_disabled', 'Stripe is not enabled. Please configure it in EduSchedule → Settings.' );
         }
@@ -300,6 +480,11 @@ class ES_Stripe {
 
         $minor = self::to_minor_units( $amount, $currency );
 
+        // Normalise address
+        $addr = wp_parse_args( (array) $addr, array(
+            'line1' => '', 'city' => '', 'state' => '', 'postal' => '', 'country' => '',
+        ) );
+
         $body = array(
             'amount'                 => $minor,
             'currency'               => strtolower( $currency ),
@@ -314,6 +499,16 @@ class ES_Stripe {
         );
         if ( $email ) $body['receipt_email'] = $email;
 
+        // Attach billing details (incl. address) to the PaymentIntent. This is
+        // required for Indian (INR) card payments under RBI/Stripe rules and
+        // also improves acceptance rates elsewhere.
+        if ( $name )            $body['shipping[name]']               = $name;
+        if ( $addr['line1'] )   $body['shipping[address][line1]']     = $addr['line1'];
+        if ( $addr['city'] )    $body['shipping[address][city]']      = $addr['city'];
+        if ( $addr['state'] )   $body['shipping[address][state]']     = $addr['state'];
+        if ( $addr['postal'] )  $body['shipping[address][postal_code]'] = $addr['postal'];
+        if ( $addr['country'] ) $body['shipping[address][country]']   = $addr['country'];
+
         $resp = self::request( 'POST', '/payment_intents', $body );
         if ( is_wp_error( $resp ) ) return $resp;
 
@@ -324,8 +519,27 @@ class ES_Stripe {
         // Record pending payment
         global $wpdb;
         $now = current_time( 'mysql' );
-        $wpdb->insert( $wpdb->prefix . 'es_payments', array(
+        $snap = self::payment_session_snapshot( $pkg, $billing_cycle );
+        $flow_type = ES_Packages::get_staged_flow( $user_id );
+        $latest    = ES_Packages::get_latest_lead_outcome( $user_id );
+        $group_id  = ( $flow_type === 'group' && $latest && ! empty( $latest->group_id ) ) ? (int) $latest->group_id : 0;
+        if ( $group_id ) {
+            $course_ids  = ES_Packages::get_group_course_ids( $group_id );
+            $course_id   = ES_Packages::first_course_id( $course_ids );
+            $course_name = ES_Packages::course_names_str( $course_ids );
+            if ( $course_name === '' && $latest && ! empty( $latest->course_name ) ) $course_name = $latest->course_name;
+        } else {
+            $flow_type   = '1to1';
+            $course_ids  = ES_Packages::get_student_course_ids( $user_id );
+            $course_id   = ES_Packages::first_course_id( $course_ids );
+            $course_name = ES_Packages::course_name( $course_id );
+        }
+        $wpdb->insert( $wpdb->prefix . 'es_payments', array_merge( array(
             'user_id'            => (int) $user_id,
+            'course_id'          => $course_id ?: null,
+            'course_name'        => $course_name,
+            'flow_type'          => $flow_type,
+            'group_id'           => $group_id ?: null,
             'package_id'         => (int) $package_id,
             'amount'             => $amount,
             'currency'           => $currency,
@@ -335,12 +549,15 @@ class ES_Stripe {
             'status'             => 'pending',
             'meta'               => wp_json_encode( array(
                 'created_via' => 'payment_intent',
+                'flow_type'   => $flow_type,
+                'group_id'    => $group_id,
                 'name'        => $name,
                 'email'       => $email,
+                'address'     => $addr,
             ) ),
             'created_at'         => $now,
             'updated_at'         => $now,
-        ) );
+        ), $snap ) );
 
         return array(
             'client_secret'     => $resp['client_secret'],
@@ -391,7 +608,8 @@ class ES_Stripe {
         }
 
         $valid_from  = current_time( 'mysql' );
-        $valid_until = self::compute_valid_until( $row->billing_cycle, $valid_from );
+        $row_months  = max( 1, (int) ( $row->months ?? 1 ) );
+        $valid_until = self::compute_valid_until( $row->billing_cycle, $valid_from, $row_months );
 
         $wpdb->update(
             $wpdb->prefix . 'es_payments',
@@ -410,13 +628,25 @@ class ES_Stripe {
         $row->valid_from  = $valid_from;
         $row->valid_until = $valid_until;
 
-        // Assign package to user
-        update_user_meta( $row->user_id, ES_Packages::META_PACKAGE_ID, (int) $row->package_id );
+        // Safety net: ensure the student actually receives their sessions even
+        // if the snapshot stored at creation was empty (#1 — "after buy, no
+        // sessions in 1:1 section").
+        $row = self::backfill_sessions_if_missing( $row );
+
+        // Assign package to user only for 1:1 flow. Group payments must not overwrite 1:1 package meta.
+        if ( empty( $row->flow_type ) || $row->flow_type !== 'group' ) {
+            update_user_meta( $row->user_id, ES_Packages::META_PACKAGE_ID, (int) $row->package_id );
+        }
+        if ( ! empty( $row->group_id ) ) {
+            update_user_meta( $row->user_id, ES_Packages::META_HAS_GROUP, 1 );
+            update_user_meta( $row->user_id, ES_Packages::META_GROUP_ID, (int) $row->group_id );
+            ES_Packages::add_user_to_group( (int) $row->group_id, (int) $row->user_id );
+        }
 
         // Record as a lead-package link with current outcome
         $existing_outcome = ES_Packages::get_latest_lead_outcome( $row->user_id );
-        $outcome_label = $existing_outcome ? $existing_outcome->outcome : '1:1 Student';
-        $group_id      = $existing_outcome && $existing_outcome->group_id ? (int) $existing_outcome->group_id : null;
+        $group_id      = ! empty( $row->group_id ) ? (int) $row->group_id : ( $existing_outcome && $existing_outcome->group_id ? (int) $existing_outcome->group_id : null );
+        $outcome_label = ( ! empty( $row->flow_type ) && $row->flow_type === 'group' ) || $group_id ? 'Group Student' : ( $existing_outcome ? $existing_outcome->outcome : '1:1 Student' );
 
         ES_Packages::link_lead_to_package(
             (int) $row->user_id,
@@ -425,6 +655,11 @@ class ES_Stripe {
             'Payment received via Stripe (' . $row->billing_cycle . ', inline)',
             $group_id
         );
+        if ( $group_id && $outcome_label === 'Group Student' ) {
+            $g_update = array( 'package_id' => (int) $row->package_id );
+            if ( ! empty( $row->course_id ) ) $g_update['course_ids'] = (string) (int) $row->course_id;
+            ES_Packages::update_group( (int) $group_id, $g_update );
+        }
 
         // Clear token + staged so the link can't be re-used
         ES_Packages::clear_token( $row->user_id );
@@ -499,7 +734,8 @@ class ES_Stripe {
 
         // Mark paid + set validity
         $valid_from  = current_time( 'mysql' );
-        $valid_until = self::compute_valid_until( $row->billing_cycle, $valid_from );
+        $row_months  = max( 1, (int) ( $row->months ?? 1 ) );
+        $valid_until = self::compute_valid_until( $row->billing_cycle, $valid_from, $row_months );
 
         /* ── GUEST CHECKOUT: row may have user_id=0. Create/find a WP user
          *    from the email captured at checkout time so package can be assigned. */
@@ -572,13 +808,23 @@ class ES_Stripe {
             array( 'id' => $row->id )
         );
 
-        // Assign package to user
-        update_user_meta( $row->user_id, ES_Packages::META_PACKAGE_ID, (int) $row->package_id );
+        // Assign package to user only for 1:1 flow. Group payments must not overwrite 1:1 package meta.
+        if ( empty( $row->flow_type ) || $row->flow_type !== 'group' ) {
+            update_user_meta( $row->user_id, ES_Packages::META_PACKAGE_ID, (int) $row->package_id );
+        }
+        if ( ! empty( $row->group_id ) ) {
+            update_user_meta( $row->user_id, ES_Packages::META_HAS_GROUP, 1 );
+            update_user_meta( $row->user_id, ES_Packages::META_GROUP_ID, (int) $row->group_id );
+            ES_Packages::add_user_to_group( (int) $row->group_id, (int) $row->user_id );
+        }
+
+        // Safety net: grant sessions even if the snapshot was empty (#1).
+        $row = self::backfill_sessions_if_missing( $row );
 
         // Record as a lead-package link with "Paid" outcome
         $existing_outcome = ES_Packages::get_latest_lead_outcome( $row->user_id );
-        $outcome_label = $existing_outcome ? $existing_outcome->outcome : '1:1 Student';
-        $group_id      = $existing_outcome && $existing_outcome->group_id ? (int) $existing_outcome->group_id : null;
+        $group_id      = ! empty( $row->group_id ) ? (int) $row->group_id : ( $existing_outcome && $existing_outcome->group_id ? (int) $existing_outcome->group_id : null );
+        $outcome_label = ( ! empty( $row->flow_type ) && $row->flow_type === 'group' ) || $group_id ? 'Group Student' : ( $existing_outcome ? $existing_outcome->outcome : '1:1 Student' );
 
         ES_Packages::link_lead_to_package(
             $row->user_id,
@@ -587,6 +833,11 @@ class ES_Stripe {
             'Payment received via Stripe (' . $row->billing_cycle . ')',
             $group_id
         );
+        if ( $group_id && $outcome_label === 'Group Student' ) {
+            $g_update = array( 'package_id' => (int) $row->package_id );
+            if ( ! empty( $row->course_id ) ) $g_update['course_ids'] = (string) (int) $row->course_id;
+            ES_Packages::update_group( (int) $group_id, $g_update );
+        }
 
         // Clear token + staged
         ES_Packages::clear_token( $row->user_id );
@@ -598,10 +849,12 @@ class ES_Stripe {
         return true;
     }
 
-    public static function compute_valid_until( $billing_cycle, $from_mysql ) {
+    public static function compute_valid_until( $billing_cycle, $from_mysql, $months = 1 ) {
         try {
             $dt = new DateTime( $from_mysql, new DateTimeZone( 'UTC' ) );
-            $months = ( $billing_cycle === 'yearly' ) ? 12 : 1;
+            // Grant access for the full purchased duration. `$months` comes from
+            // the package's `months` column (snapshotted on the payment row).
+            $months = max( 1, (int) $months );
             $dt->modify( '+' . $months . ' months' );
             return $dt->format( 'Y-m-d H:i:s' );
         } catch ( Exception $e ) {
@@ -647,7 +900,7 @@ class ES_Stripe {
         </div>
         <?php
         $html = ob_get_clean();
-        wp_mail( $user->user_email, $subject, $html, array( 'Content-Type: text/html; charset=UTF-8' ) );
+        if ( class_exists( 'ES_Mailer' ) ) { ES_Mailer::send( $user->user_email, $subject, $html ); } else { wp_mail( $user->user_email, $subject, $html, array( 'Content-Type: text/html; charset=UTF-8' ) ); }
 
         // Admin email (plain text — simple)
         $admin_email = get_option( 'admin_email' );
@@ -660,7 +913,7 @@ class ES_Stripe {
             $admin_body .= "Amount: {$amount_label}\n";
             if ( $valid_to ) $admin_body .= "Valid Until: {$valid_to}\n";
             $admin_body .= "\nView all payments: " . admin_url( 'admin.php?page=eduschedule-bookings' );
-            wp_mail( $admin_email, $admin_subject, $admin_body );
+            if ( class_exists( 'ES_Mailer' ) ) { ES_Mailer::send( $admin_email, $admin_subject, nl2br( esc_html( $admin_body ) ) ); } else { wp_mail( $admin_email, $admin_subject, $admin_body ); }
         }
     }
 

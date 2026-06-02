@@ -1,6 +1,6 @@
 .course-page{
     padding: 40px 0px;
-    background:url("../images/bg-course.png") no-repeat;
+    background:url("../images/bg-course.png") no-repeat, radial-gradient(20% 20% at 40% 40%, #558dca2e 0%, rgba(255, 255, 255, 0) 100%);
 }
 
 /* ============== BREADCRUMB ============== */
@@ -38,7 +38,7 @@
 .course-author{
     margin-top:var(--sp-5);
     margin-bottom:35px;
-    font-size:15px;
+    font-size:16px;
     color:var(--color-text-secondary);
 }
 
@@ -51,11 +51,7 @@ INFO CARD
 ========================= */
 
 .info-card{
-    background:linear-gradient(
-        180deg,
-        var(--color-bg-elevated) 0%,
-        var(--color-bg-card) 100%
-    );
+    background:#6F6F6F10;
 
     border:1px solid var(--color-border);
     border-radius:var(--radius-xl);
@@ -91,7 +87,7 @@ INFO CARD
 
     padding:24px 20px;
 
-    font-size:15px;
+    font-size:16px;
     font-weight:700;
 
     text-transform:uppercase;
@@ -126,11 +122,7 @@ SIDEBAR
 ========================= */
 
 .sidebar{
-    background:linear-gradient(
-        180deg,
-        var(--color-bg-elevated) 0%,
-        var(--color-bg-card) 100%
-    );
+    background:#6F6F6F10;
 
     border:1px solid var(--color-border);
     border-radius:var(--radius-xl);
@@ -181,26 +173,23 @@ SIDEBAR
     margin-top:10px;
     border-radius:var(--radius-lg);
     height:52px;
-    font-size:15px;
+    font-size:16px;
     font-weight:600;
 }
 
 /* =========================
 COMMON CARD
 ========================= */
+.course-card {
+    margin-bottom:60px;
+}
 
-.card{
-    background:linear-gradient(
-        180deg,
-        var(--color-bg-elevated) 0%,
-        var(--color-bg-card) 100%
-    );
-
+.bg-box{
+    background:#6F6F6F10;
     border:1px solid var(--color-border);
     border-radius:var(--radius-xl);
 
     padding:35px;
-    margin-bottom:30px;
 
     box-shadow:var(--shadow-lg);
 }
@@ -229,7 +218,7 @@ LEARN LIST
     position:relative;
     padding-left:34px;
     color:var(--color-text-secondary);
-    font-size:15px;
+    font-size:16px;
     line-height:1.7;
 }
 
@@ -298,7 +287,7 @@ INCLUDES
     padding-left:30px;
 
     color:var(--color-text-secondary);
-    font-size:15px;
+    font-size:16px;
 }
 
 .includes-list li::before{
@@ -317,50 +306,46 @@ INCLUDES
 /* =========================
 ACCORDION
 ========================= */
-
-.accordion-section{
-    background:var(--color-bg-elevated);
-
-    border:1px solid var(--color-border);
-    border-radius:var(--radius-lg);
-
-    overflow:hidden;
-    margin-bottom:16px;
+.accordion{
+        border-radius:var(--radius-lg);
+        overflow:hidden;
+        background:#6F6F6F10;
+        padding:20px;
 }
-
+.accordion-section{
+    border-bottom:1px dashed var(--color-border);
+    overflow:hidden;
+}
+.accordion-section:last-child{
+    border-bottom:none;
+}
 .accordion-header{
     display:flex;
     justify-content:space-between;
     align-items:center;
-
-    padding:22px 24px;
-
+    padding:16px 24px;
     cursor:pointer;
     transition:var(--transition);
 }
 
-.accordion-header:hover{
-    background:var(--color-bg-card-hover);
-}
 
 .accordion-title{
     display:flex;
     align-items:center;
     gap:14px;
 
-    font-size:16px;
+    font-size:20px;
     color:var(--color-text-primary);
-    font-weight:600;
+    font-weight:500;
 }
 
 .accordion-icon{
     color:var(--color-primary);
-    font-size:15px;
     transition:var(--transition);
 }
 
 .accordion-section.active .accordion-icon{
-    transform:rotate(45deg);
+    transform:rotate(180deg);
 }
 
 .accordion-play{
@@ -370,7 +355,6 @@ ACCORDION
 }
 
 .accordion-body{
-    background:var(--color-bg-card);
 
     max-height:0;
     overflow:hidden;
@@ -379,7 +363,9 @@ ACCORDION
 }
 
 .accordion-section.active .accordion-body{
-    max-height:1200px;
+        max-height: 1200px;
+    padding: 20px 0px;
+    border-top: 1px dashed var(--color-border);
 }
 
 .lesson{
@@ -388,11 +374,7 @@ ACCORDION
     display:flex;
     justify-content:space-between;
     align-items:center;
-
-    padding:18px 24px 18px 55px;
-
-    border-top:1px solid var(--color-border);
-
+    padding:8px 24px 8px 55px;
     color:var(--color-text-secondary);
     font-size:14px;
 }
@@ -400,13 +382,13 @@ ACCORDION
 .lesson::before{
     content:"";
      background:url("../images/check.svg") no-repeat center center;
-    width:20px; 
-    height:20px;
-    position:absolute;
-    left:24px;
-
-    color:var(--color-primary);
-    font-size:10px;
+        background-size: contain;
+    width: 20px;
+    height: 20px;
+    position: absolute;
+    left: 24px;
+    font-size: 10px;
+    filter: grayscale(1);
 }
 
 .lesson-duration{
@@ -428,25 +410,22 @@ REQUIREMENTS
 }
 
 .requirements-list li::before{
-    content:"✓";
-
+ content:" ";
+     background:url("../images/check.svg") no-repeat center center;
+  
     position:absolute;
     left:0;
-    top:4px;
+    top:3px;
 
-    width:20px;
-    height:20px;
+    width:22px;
+    height:22px;
 
-    border-radius:50%;
-
-    background:var(--color-primary-light);
-    color:var(--color-primary);
+    font-size:12px;
 
     display:flex;
     align-items:center;
     justify-content:center;
 
-    font-size:11px;
     font-weight:bold;
 }
 

@@ -35,7 +35,8 @@ $related     = get_field('related_courses');
                 </div>
 
                 <div class="info-card">
-                    <div class="premium-badge">⚡ Premium</div>
+                    <div class="premium-badge"> <img src="/wp-content/themes/hello-elementor/assets/images/ribbon-badge.svg"  alt="ribbon-badge">
+                                 Premium</div>
                     <div class="info-item">
                         <span>Access 28,000+ top-rated</span>
                         <span>courses with Ivy Personal Plan.</span>
@@ -55,8 +56,8 @@ $related     = get_field('related_courses');
                 
         <!-- WHAT YOU LEARN -->
         <?php if ($learn): ?>
-        <div class="card">
-            <h2>What you'll <span class="highlight">learn</span></h2>
+        <div class="course-card bg-box">
+            <h2>What you'll <span class="highlight">Learn</span></h2>
             <ul class="learn-list">
                 <?php foreach ($learn as $item): ?>
                     <li><?php echo esc_html($item['item']); ?></li>
@@ -67,7 +68,7 @@ $related     = get_field('related_courses');
 
         <!-- INCLUDES -->
         <?php if ($includes): ?>
-        <div class="card">
+        <div class="course-card">
             <h2>This course includes</h2>
             <ul class="includes-list">
                 <?php foreach ($includes as $item): ?>
@@ -79,17 +80,16 @@ $related     = get_field('related_courses');
 
         <!-- COURSE CONTENT -->
         <?php if ($content): ?>
-        <div class="card">
+        <div class="course-card">
             <h2>Course content</h2>
-
+            <div class="accordion bg-box">
             <?php foreach ($content as $index => $section): ?>
                 <div class="accordion-section <?php echo $index === 0 ? 'active' : ''; ?>">
                     <div class="accordion-header" onclick="toggleAccordion(this)">
                         <div class="accordion-title">
-                            <span class="accordion-icon">+</span>
                             <span><?php echo esc_html($section['title']); ?></span>
                         </div>
-                        <span class="accordion-play">Play</span>
+                        <span class="accordion-icon"> <img src="/wp-content/themes/hello-elementor/assets/images/arrow-down.svg"  alt="arrow-down"></span>
                     </div>
 
                     <?php if (!empty($section['lessons'])): ?>
@@ -104,13 +104,13 @@ $related     = get_field('related_courses');
                     <?php endif; ?>
                 </div>
             <?php endforeach; ?>
-
+           </div>
         </div>
         <?php endif; ?>
 
         <!-- REQUIREMENTS -->
         <?php if ($requirements): ?>
-        <div class="card">
+        <div class="course-card">
             <h2>Requirements</h2>
             <ul class="requirements-list">
                 <?php foreach ($requirements as $req): ?>
@@ -122,7 +122,7 @@ $related     = get_field('related_courses');
 
         <!-- RELATED COURSES -->
         <?php if ($related): ?>
-        <div class="card">
+        <div class="course-card">
             <h2>Students <span class="highlight">also bought</span></h2>
 
             <div class="related-grid">
