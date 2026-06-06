@@ -1624,7 +1624,7 @@ class ES_Packages {
         // The id of the user's currently-active plan — legacy bookings that
         // have NULL payment_id are counted against this one (so older data
         // keeps working after upgrade).
-        $active = self::get_active_plan( $user_id );
+        $active    = self::get_active_plan( $user_id );
         $active_id = $active ? (int) $active->id : 0;
 
         $latest_used = null;
@@ -1634,31 +1634,46 @@ class ES_Packages {
             // Bookings counted against THIS payment:
             //   - any booking with bk.payment_id = $pid, OR
             //   - if this row is the active plan, also legacy bookings (NULL).
-            $cond  = '( bk.payment_id = %d';
-            $args  = array( $pid );
+            $cond = '( bk.payment_id = %d';
+            $args = array( $pid );
             if ( $pid === $active_id ) {
                 $cond .= ' OR bk.payment_id IS NULL';
             }
             $cond .= ' )';
 
-            // used_sessions counts only attendance-approved sessions:
-            // 'present' or 'absent_unexcused'. Scheduling alone does NOT
-            // consume a session — the count changes only after the admin
-            // marks attendance. Demo sessions are excluded via slot_type='1to1'.
-            $used = (int) $wpdb->get_var( $wpdb->prepare(
+            // Schedule-time consumption model (v4.3+):
+            // Every confirmed 1:1 booking uses one session immediately.
+            // "Absent – with permission" refunds it; all other statuses (or no
+            // attendance row yet) keep the session consumed.
+            // Demo sessions (slot_type = 'demo') are excluded.
+            $scheduled = (int) $wpdb->get_var( $wpdb->prepare(
+                "SELECT COUNT(DISTINCT bk.slot_id)
+                   FROM {$b} bk
+                   INNER JOIN {$s} sl ON sl.id = bk.slot_id
+                  WHERE bk.user_id = %d
+                    AND bk.status  = 'confirmed'
+                    AND sl.slot_type = '1to1'
+                    AND {$cond}",
+                array_merge( array( $user_id ), $args )
+            ) );
+
+            // Subtract sessions where attendance is "absent_excused" (refunded).
+            $excused = (int) $wpdb->get_var( $wpdb->prepare(
                 "SELECT COUNT(DISTINCT bk.slot_id)
                    FROM {$b} bk
                    INNER JOIN {$s} sl ON sl.id = bk.slot_id
                    INNER JOIN {$a} at ON at.slot_id = bk.slot_id
-                                     AND at.user_id = bk.user_id
+                                     AND at.user_id  = bk.user_id
                                      AND ( at.group_id IS NULL OR at.group_id = 0 )
                   WHERE bk.user_id = %d
-                    AND bk.status = 'confirmed'
+                    AND bk.status  = 'confirmed'
                     AND sl.slot_type = '1to1'
-                    AND at.status IN ('present','absent_unexcused')
+                    AND at.status = 'absent_excused'
                     AND {$cond}",
                 array_merge( array( $user_id ), $args )
             ) );
+
+            $used  = max( 0, $scheduled - $excused );
             $total = (int) $row->total_sessions;
             if ( $total > 0 && $used > $total ) $used = $total;
 

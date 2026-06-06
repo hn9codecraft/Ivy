@@ -2,15 +2,15 @@
 /**
  * Plugin Name: EduSchedule
  * Description: Modern booking platform with frontend register/login, user dashboard, slot-based booking (1:1 / Group / Open / Personal), Zoom auto-create, country-aware timezones.
- * Version: 4.6.0
+ * Version: 4.6.1
  * Author: Your Name
  * Text Domain: eduschedule
  */
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'ES_VERSION', '4.6.0' );
-define( 'ES_DB_VERSION', '2.0.4' ); // bump when DB schema changes
+define( 'ES_VERSION', '4.6.1' );
+define( 'ES_DB_VERSION', '2.0.5' ); // bump when DB schema changes
 define( 'ES_FILE', __FILE__ );
 define( 'ES_DIR', plugin_dir_path( __FILE__ ) );
 define( 'ES_URL', plugin_dir_url( __FILE__ ) );

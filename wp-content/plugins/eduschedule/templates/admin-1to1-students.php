@@ -334,7 +334,6 @@ if ( ! function_exists( 'es_user_sessions_left' ) ) {
                             if ( $plan && ! empty( $plan->course_name ) ) {
                                 $sd_current_course_name = $plan->course_name;
                             }
-                            $show_single_pkg_summary = empty( $sd_all_paid ) || count( $sd_all_paid ) <= 1;
                             ?>
                             <?php if ( $sched_blocked ) : ?>
                                 <div class="es-alert es-alert-warning" style="margin-bottom:14px;padding:10px 12px;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;color:#92400e;font-size:13px;line-height:1.5;">
@@ -344,30 +343,6 @@ if ( ! function_exists( 'es_user_sessions_left' ) ) {
                                     <?php endif; ?>
                                 </div>
                             <?php endif; ?>
-                            <div class="es-pkgcourse-head">
-                                <div class="es-pkgcourse-col">
-                                    <span class="es-pkgcourse-label">Package</span>
-                                    <strong class="es-pkgcourse-val"><?php echo $pkg ? esc_html( $pkg->package_name ) : 'No Package Assigned'; ?></strong>
-                                </div>
-                                <div class="es-pkgcourse-col">
-                                    <span class="es-pkgcourse-label">Course</span>
-                                    <strong class="es-pkgcourse-val"><?php echo $sd_current_course_name !== '' ? esc_html( $sd_current_course_name ) : '—'; ?></strong>
-                                </div>
-                            </div>
-                            <?php if ( $show_single_pkg_summary ) : ?>
-                            <div class="es-usage-panel">
-                                <div class="es-usage-title"><span class="dashicons dashicons-archive"></span><?php echo $pkg ? esc_html( $pkg->package_name ) : 'No Package Assigned'; ?></div>
-                                <div class="es-usage-stats">
-                                    <div><div class="es-usage-stat-val"><?php echo (int) $total; ?></div><div class="es-usage-stat-label">Total</div></div>
-                                    <div><div class="es-usage-stat-val"><?php echo (int) $used; ?></div><div class="es-usage-stat-label">Used</div></div>
-                                    <div><div class="es-usage-stat-val is-left"><?php echo (int) $left; ?></div><div class="es-usage-stat-label">Left</div></div>
-                                </div>
-                                <div class="es-usage-bar"><div class="es-usage-bar-fill" style="width:<?php echo (int) $pct; ?><?php echo '%'; ?>;"></div></div>
-                                <div class="es-usage-foot"><span><?php echo (int) $pct; ?><?php echo '%'; ?> used</span><span><?php echo $dur > 0 ? ( (int) $dur . ' month' . ( $dur > 1 ? 's' : '' ) . ' program' ) : ''; ?></span></div>
-                            </div>
-
-                            <?php endif; ?>
-
                             <?php if ( ! empty( $sd_all_paid ) ) :
                                 $now_ts = current_time( 'timestamp' );
                             ?>
@@ -456,10 +431,6 @@ if ( ! function_exists( 'es_user_sessions_left' ) ) {
                             <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap;">
                                 <div class="es-section-label" style="margin:0;">All Scheduled Meetings</div>
                                 <div style="display:flex;gap:8px;align-items:center;">
-                                    <!-- v4.5: Global upload button in Schedule header -->
-                                    <button type="button" class="es-btn es-btn-ghost es-btn-sm es-open-global-upload" title="Upload a file not tied to a session">
-                                        <span class="dashicons dashicons-upload" style="font-size:14px;width:14px;height:14px;vertical-align:text-bottom;"></span> Global Upload
-                                    </button>
                                     <?php if ( $sched_blocked ) : ?>
                                         <button type="button" class="es-btn es-btn-primary es-btn-sm" disabled title="<?php echo esc_attr( $sched_reason ); ?>">+ Schedule</button>
                                     <?php else : ?>
@@ -626,6 +597,38 @@ if ( ! function_exists( 'es_user_sessions_left' ) ) {
                                         </tbody>
                                     </table>
                                     </div>
+                                    </div>
+                                    <!-- Package-wise global files (slot_id IS NULL, matching package_id) -->
+                                    <?php
+                                    $pkg_global_files = array_values( array_filter( $global_files, function($gf) use ($sgrp) {
+                                        return $sgrp['pkg_id'] > 0
+                                            ? (int) ( $gf->package_id ?? 0 ) === (int) $sgrp['pkg_id']
+                                            : empty( $gf->package_id );
+                                    } ) );
+                                    ?>
+                                    <?php if ( ! empty( $pkg_global_files ) ) : ?>
+                                        <div style="padding:10px 14px;border-top:1px solid #f1f5f9;">
+                                            <div class="es-section-label" style="font-size:11px;margin-bottom:6px;">Package Files</div>
+                                            <div class="es-slot-files-wrap" id="es-pkg-files-<?php echo (int) $sgrp['pkg_id']; ?>" style="display:flex;flex-wrap:wrap;gap:6px;">
+                                                <?php foreach ( $pkg_global_files as $gf ) : ?>
+                                                    <div class="es-file-chip" data-file-id="<?php echo (int) $gf->id; ?>" style="display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:6px 10px;">
+                                                        <span class="es-pill es-pill-info" style="font-size:10px;padding:2px 6px;"><?php echo esc_html( strtoupper( $gf->file_type ) ); ?></span>
+                                                        <a href="<?php echo esc_url( $gf->file_url ); ?>" target="_blank" rel="noopener" style="font-size:12px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;"><?php echo esc_html( $gf->file_name ); ?></a>
+                                                        <button type="button" class="es-delete-file-btn" data-file-id="<?php echo (int) $gf->id; ?>" title="Delete file" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px;line-height:1;padding:0;">×</button>
+                                                    </div>
+                                                <?php endforeach; ?>
+                                            </div>
+                                        </div>
+                                    <?php else : ?>
+                                        <div id="es-pkg-files-<?php echo (int) $sgrp['pkg_id']; ?>" style="display:none;padding:10px 14px;border-top:1px solid #f1f5f9;"></div>
+                                    <?php endif; ?>
+                                    <div style="padding:10px 14px;display:flex;justify-content:flex-end;border-top:1px solid #f1f5f9;">
+                                        <button type="button" class="es-btn es-btn-ghost es-btn-sm es-open-pkg-upload"
+                                            data-pkg-id="<?php echo (int) $sgrp['pkg_id']; ?>"
+                                            data-pkg-name="<?php echo esc_attr( $sgrp['pkg_name'] ); ?>"
+                                            title="Upload files for this package">
+                                            <span class="dashicons dashicons-upload" style="font-size:14px;width:14px;height:14px;vertical-align:text-bottom;"></span> Upload Files
+                                        </button>
                                     </div>
                                 </div>
                                 <?php endforeach; ?>
@@ -805,17 +808,19 @@ if ( ! function_exists( 'es_user_sessions_left' ) ) {
     <?php endif; ?>
 </div>
 
-<!-- v4.6: Global Upload Modal — supports files, images, videos -->
+<!-- v4.6: Global Upload Modal — supports files, images, videos (package-wise) -->
 <div id="es-global-upload-modal" class="es-schedule-modal" aria-hidden="true" style="display:none;">
     <div class="es-schedule-modal-overlay"></div>
     <div class="es-schedule-modal-card" style="max-width:520px;">
         <button type="button" class="es-schedule-modal-close" aria-label="Close">×</button>
         <div class="es-section-label" style="margin-bottom:4px;">Upload Files / Images / Videos</div>
-        <p style="font-size:12.5px;color:var(--es-text-muted);margin:0 0 18px;line-height:1.6;">
-            Attach files to this student (not tied to any session). Visible in the Schedule tab.
+        <p style="font-size:12.5px;color:var(--es-text-muted);margin:0 0 4px;line-height:1.6;">
+            Attach files to this student. Visible in the Schedule tab under the package.
         </p>
+        <div id="es-gu-pkg-label" style="display:none;font-size:12px;font-weight:600;color:#6d28d9;margin-bottom:12px;padding:6px 10px;background:#f5f3ff;border:1px solid #c4b5fd;border-radius:8px;"></div>
         <input type="hidden" id="es-gu-target-type" value="1to1" />
         <input type="hidden" id="es-gu-target-id" value="<?php echo $detail_mode && $selected ? (int) $selected->ID : 0; ?>" />
+        <input type="hidden" id="es-gu-package-id" value="" />
         <div class="es-field">
             <label class="es-label" style="margin-bottom:8px;">Choose file(s)</label>
             <label class="es-upload-drop-zone" id="es-gu-drop-zone">
@@ -1092,11 +1097,30 @@ jQuery(function($){
         doNext(0);
     });
 
-    /* ── Global upload modal ── */
+    /* ── Global / package upload modal ── */
+    $(document).on('click', '.es-open-pkg-upload', function(){
+        var pkgId   = $(this).data('pkg-id') || 0;
+        var pkgName = $(this).data('pkg-name') || '';
+        $('#es-gu-file').val('');
+        $('#es-gu-msg').hide();
+        $('#es-gu-preview').empty().hide();
+        $('#es-gu-package-id').val(pkgId);
+        if (pkgId && pkgName) {
+            $('#es-gu-pkg-label').text('📦 ' + pkgName).show();
+        } else {
+            $('#es-gu-pkg-label').hide();
+        }
+        var $modal = $('#es-global-upload-modal');
+        $modal.addClass('is-open').attr('aria-hidden','false').css('display','flex');
+        $('body').addClass('es-modal-open');
+    });
+    // Keep legacy .es-open-global-upload support (no package)
     $(document).on('click', '.es-open-global-upload', function(){
         $('#es-gu-file').val('');
         $('#es-gu-msg').hide();
         $('#es-gu-preview').empty().hide();
+        $('#es-gu-package-id').val('');
+        $('#es-gu-pkg-label').hide();
         var $modal = $('#es-global-upload-modal');
         $modal.addClass('is-open').attr('aria-hidden','false').css('display','flex');
         $('body').addClass('es-modal-open');
@@ -1121,6 +1145,7 @@ jQuery(function($){
             fd.append('nonce', ES_ADMIN.nonce);
             fd.append('target_type', type);
             fd.append('target_id', tid);
+            fd.append('package_id', $('#es-gu-package-id').val() || 0);
             fd.append('file', files[i]);
             $.ajax({ url: ES_ADMIN.ajax_url, type:'POST', data: fd, processData: false, contentType: false }).done(function(res){
                 if (res && res.success) uploaded++;

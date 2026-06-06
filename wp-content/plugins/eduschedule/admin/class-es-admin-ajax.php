@@ -2086,6 +2086,7 @@ class ES_Admin_Ajax {
             'target_type' => $target_type,
             'user_id'     => $target_type === '1to1' ? $target_id : null,
             'group_id'    => $target_type === 'group' ? $target_id : null,
+            'package_id'  => isset( $_POST['package_id'] ) && (int) $_POST['package_id'] > 0 ? (int) $_POST['package_id'] : null,
             'file_name'   => sanitize_file_name( $file['name'] ),
             'file_url'    => esc_url_raw( $moved['url'] ),
             'file_path'   => $moved['file'],
@@ -2208,8 +2209,11 @@ class ES_Admin_Ajax {
             ) );
         }
 
-        // Return the student's refreshed session counts so the UI can update
-        // (attendance can refund an excused absence on 1:1 sessions).
+        // Recompute 1:1 used_sessions from actual bookings (schedule-time model):
+        // scheduling consumes a session immediately; absent_excused refunds it.
+        ES_Packages::recount_used_sessions( $user_id );
+
+        // Return the student's refreshed session counts so the UI can update.
         $plan = ES_Packages::get_active_plan( $user_id );
         wp_send_json_success( array(
             'message'        => 'Attendance saved',

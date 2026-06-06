@@ -503,14 +503,11 @@ $detail_mode      = ! empty( $selected );
                             </div>
                         </div>
 
-                        <!-- SCHEDULE (with edit/delete + global upload) -->
+                        <!-- SCHEDULE (with edit/delete + per-package upload) -->
                         <div class="es-tabpane" data-pane="schedule" style="display:none;">
                             <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap;">
                                 <div class="es-section-label" style="margin:0;">All Scheduled Meetings</div>
                                 <div style="display:flex;gap:8px;align-items:center;">
-                                    <button type="button" class="es-btn es-btn-ghost es-btn-sm es-open-global-upload" title="Upload a file not tied to a session">
-                                        <span class="dashicons dashicons-upload" style="font-size:14px;width:14px;height:14px;vertical-align:text-bottom;"></span> Global Upload
-                                    </button>
                                     <?php if ( $g_sched_blocked ) : ?>
                                         <button type="button" class="es-btn es-btn-primary es-btn-sm" disabled title="<?php echo esc_attr( $g_sched_reason ); ?>">+ Schedule</button>
                                     <?php else : ?>
@@ -650,6 +647,29 @@ $detail_mode      = ! empty( $selected );
                                     </table>
                                 </div>
                             <?php endif; ?>
+                            <!-- Global package files (not tied to a session) -->
+                            <?php if ( ! empty( $global_files ) ) : ?>
+                                <div style="padding:10px 0 4px;">
+                                    <div class="es-section-label" style="font-size:11px;margin-bottom:6px;">Group Files (not tied to a session)</div>
+                                    <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:10px;">
+                                        <?php foreach ( $global_files as $gf ) : ?>
+                                            <div class="es-file-chip" data-file-id="<?php echo (int) $gf->id; ?>" style="display:inline-flex;align-items:center;gap:6px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:6px 10px;">
+                                                <span class="es-pill es-pill-info" style="font-size:10px;padding:2px 6px;"><?php echo esc_html( strtoupper( $gf->file_type ) ); ?></span>
+                                                <a href="<?php echo esc_url( $gf->file_url ); ?>" target="_blank" rel="noopener" style="font-size:12px;max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:inline-block;"><?php echo esc_html( $gf->file_name ); ?></a>
+                                                <button type="button" class="es-delete-file-btn" data-file-id="<?php echo (int) $gf->id; ?>" title="Delete file" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:16px;line-height:1;padding:0;">×</button>
+                                            </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </div>
+                            <?php endif; ?>
+                            <div style="display:flex;justify-content:flex-end;margin-top:8px;">
+                                <button type="button" class="es-btn es-btn-ghost es-btn-sm es-open-pkg-upload"
+                                    data-pkg-id="<?php echo $selected->package_id ? (int) $selected->package_id : 0; ?>"
+                                    data-pkg-name="<?php echo esc_attr( $selected->package_name ?: $selected->group_name ); ?>"
+                                    title="Upload files for this group">
+                                    <span class="dashicons dashicons-upload" style="font-size:14px;width:14px;height:14px;vertical-align:text-bottom;"></span> Upload Files
+                                </button>
+                            </div>
                         </div>
 
                         <!-- MEMBERS -->
@@ -756,6 +776,36 @@ $detail_mode      = ! empty( $selected );
                                     </button>
                                 </div>
                             </div>
+
+                            <!-- Add Student to Group (admin-only, no payment) -->
+                            <div class="es-section-label" style="margin:20px 0 10px;">Add Student to This Group</div>
+                            <p style="font-size:13px;color:var(--es-text-muted);margin:0 0 14px;line-height:1.5;">
+                                Manually add any registered student to this group without sending a payment link. Their existing 1:1 data remains unchanged.
+                            </p>
+                            <div class="es-card" style="padding:18px 20px;">
+                                <div class="es-field" style="margin-bottom:14px;">
+                                    <label class="es-label">Select Student</label>
+                                    <select id="es-grp-add-student" style="width:100%;padding:9px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:14px;">
+                                        <option value="">— Choose a student —</option>
+                                        <?php
+                                        // Offer ALL registered users except existing members of this group
+                                        $existing_member_ids = array_map( function($m){ return (int) $m->ID; }, $members );
+                                        $all_site_users = get_users( array( 'role__not_in' => array( 'administrator' ), 'number' => 500, 'orderby' => 'display_name', 'order' => 'ASC' ) );
+                                        foreach ( $all_site_users as $su ) :
+                                            if ( in_array( (int) $su->ID, $existing_member_ids, true ) ) continue;
+                                        ?>
+                                            <option value="<?php echo (int) $su->ID; ?>"><?php echo esc_html( $su->display_name . ' (' . $su->user_email . ')' ); ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                </div>
+                                <div id="es-grp-add-msg" style="display:none;font-size:13px;margin-bottom:10px;padding:8px 12px;border-radius:8px;"></div>
+                                <div style="display:flex;justify-content:flex-end;">
+                                    <button type="button" class="es-btn es-btn-primary" id="es-grp-add-submit" data-group-id="<?php echo (int) $selected->id; ?>">
+                                        <span class="dashicons dashicons-groups" style="font-size:16px;width:16px;height:16px;vertical-align:text-bottom;margin-right:4px;"></span>
+                                        Add to Group
+                                    </button>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- SCHEDULE MODAL (group) -->
@@ -819,17 +869,19 @@ $detail_mode      = ! empty( $selected );
     <?php endif; ?>
 </div>
 
-<!-- v4.5: Global Upload Modal (Group) -->
+<!-- v4.6: Global Upload Modal (Group) — package-wise -->
 <div id="es-global-upload-modal" class="es-schedule-modal" aria-hidden="true" style="display:none;">
     <div class="es-schedule-modal-overlay"></div>
     <div class="es-schedule-modal-card" style="max-width:480px;">
         <button type="button" class="es-schedule-modal-close" aria-label="Close">×</button>
-        <div class="es-section-label">Upload File / Video (Global)</div>
-        <p style="font-size:12.5px;color:var(--es-text-muted);margin:0 0 14px;line-height:1.5;">
-            This file will be attached to the group but not to any specific session.
+        <div class="es-section-label">Upload File / Video</div>
+        <p style="font-size:12.5px;color:var(--es-text-muted);margin:0 0 4px;line-height:1.5;">
+            Attach files to this group (not tied to any specific session).
         </p>
+        <div id="es-gu-pkg-label" style="display:none;font-size:12px;font-weight:600;color:#6d28d9;margin-bottom:12px;padding:6px 10px;background:#f5f3ff;border:1px solid #c4b5fd;border-radius:8px;"></div>
         <input type="hidden" id="es-gu-target-type" value="group" />
         <input type="hidden" id="es-gu-target-id" value="<?php echo $detail_mode && $selected ? (int) $selected->id : 0; ?>" />
+        <input type="hidden" id="es-gu-package-id" value="" />
         <div class="es-field">
             <label class="es-label">Choose file(s)</label>
             <input type="file" id="es-gu-file" multiple accept=".pdf,.doc,.docx,.ppt,.pptx,.mp4,.mov,.webm,.mkv,.avi" style="display:block;width:100%;font-size:13px;" />
@@ -1177,16 +1229,31 @@ jQuery(function($){
         doNext(0);
     });
 
-    /* ── Global upload modal ── */
+    /* ── Global / package upload modal (Group) ── */
+    $(document).on('click', '.es-open-pkg-upload', function(){
+        var pkgId   = $(this).data('pkg-id') || 0;
+        var pkgName = $(this).data('pkg-name') || '';
+        $('#es-gu-file').val(''); $('#es-gu-msg').hide();
+        $('#es-gu-package-id').val(pkgId);
+        if (pkgId && pkgName) {
+            $('#es-gu-pkg-label').text('📦 ' + pkgName).show();
+        } else {
+            $('#es-gu-pkg-label').hide();
+        }
+        $('#es-global-upload-modal').addClass('is-open').attr('aria-hidden','false').css('display','flex');
+        $('body').addClass('es-modal-open');
+    });
     $(document).on('click', '.es-open-global-upload', function(){
         $('#es-gu-file').val(''); $('#es-gu-msg').hide();
+        $('#es-gu-package-id').val('');
+        $('#es-gu-pkg-label').hide();
         $('#es-global-upload-modal').addClass('is-open').attr('aria-hidden','false').css('display','flex');
         $('body').addClass('es-modal-open');
     });
     $(document).on('click', '#es-gu-submit', function(){
         var files = document.getElementById('es-gu-file').files;
         if (!files || !files.length) { $('#es-gu-msg').css({display:'block',background:'#fee2e2',color:'#b91c1c'}).text('Please choose at least one file.'); return; }
-        var type = $('#es-gu-target-type').val(), tid = $('#es-gu-target-id').val();
+        var type = $('#es-gu-target-type').val(), tid = $('#es-gu-target-id').val(), pkgId = $('#es-gu-package-id').val() || 0;
         var $btn = $(this).prop('disabled',true).text('Uploading…');
         var uploaded = 0, total = files.length;
         function doNext(i) {
@@ -1198,7 +1265,8 @@ jQuery(function($){
             }
             var fd = new FormData();
             fd.append('action','es_admin_global_upload'); fd.append('nonce',ES_ADMIN.nonce);
-            fd.append('target_type',type); fd.append('target_id',tid); fd.append('file',files[i]);
+            fd.append('target_type',type); fd.append('target_id',tid);
+            fd.append('package_id', pkgId); fd.append('file',files[i]);
             $.ajax({url:ES_ADMIN.ajax_url,type:'POST',data:fd,processData:false,contentType:false}).done(function(res){
                 if (res && res.success) uploaded++;
                 doNext(i+1);
@@ -1293,6 +1361,33 @@ jQuery(function($){
     if ($.fn.select2 && $('#es-grp-renew-course').length) {
         $('#es-grp-renew-course').select2({ placeholder: 'Search course…', width: '100%', allowClear: true });
     }
+
+    /* ── Add Student to Group (Purchase tab) ── */
+    $(document).on('click', '#es-grp-add-submit', function(){
+        var groupId = $(this).data('group-id');
+        var userId  = $('#es-grp-add-student').val();
+        if (!userId) { $('#es-grp-add-msg').css({display:'block',background:'#fee2e2',color:'#b91c1c'}).text('Please select a student.'); return; }
+        var $btn = $(this).prop('disabled', true).text('Adding…');
+        $.post(ES_ADMIN.ajax_url, {
+            action: 'es_admin_add_group_member',
+            nonce: ES_ADMIN.nonce,
+            group_id: groupId,
+            user_id: userId
+        }).done(function(res){
+            $btn.prop('disabled', false).text('Add to Group');
+            if (res && res.success) {
+                $('#es-grp-add-msg').css({display:'block',background:'#d1fae5',color:'#065f46'}).text((res.data && res.data.message) || 'Student added successfully.');
+                // Remove student from dropdown so they can't be added twice
+                $('#es-grp-add-student option[value="' + userId + '"]').remove();
+                $('#es-grp-add-student').val('');
+            } else {
+                $('#es-grp-add-msg').css({display:'block',background:'#fee2e2',color:'#b91c1c'}).text((res && res.data && res.data.message) || 'Could not add student.');
+            }
+        }).fail(function(){
+            $btn.prop('disabled', false).text('Add to Group');
+            $('#es-grp-add-msg').css({display:'block',background:'#fee2e2',color:'#b91c1c'}).text('Server error.');
+        });
+    });
 
     /* ── Course Select2 ── */
     if ($.fn.select2 && $('#es-group-course-select').length && !$('#es-group-course-select').prop('disabled')) {
