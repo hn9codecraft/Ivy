@@ -88,7 +88,8 @@
         var $form = $(this);
         var $btn = $form.find('button[type="submit"]');
         var $msg = $('#es-lostpw-msg').hide();
-        var nonce = ES_FE.login_nonce || ES_FE.nonce;
+        // Prefer the dedicated reset nonce; fall back to login or generic nonce
+        var nonce = (ES_FE.reset_nonce) ? ES_FE.reset_nonce : (ES_FE.login_nonce || ES_FE.nonce);
 
         $btn.prop('disabled', true).text('Sending…');
         $.post(ES_FE.ajax_url, {
@@ -116,7 +117,7 @@
         var $form = $(this);
         var $btn = $form.find('button[type="submit"]');
         var $msg = $('#es-resetpw-msg').hide();
-        var nonce = ES_FE.login_nonce || ES_FE.nonce;
+        var nonce = (ES_FE.reset_nonce) ? ES_FE.reset_nonce : (ES_FE.login_nonce || ES_FE.nonce);
 
         var pw  = $form.find('[name="password"]').val();
         var pw2 = $form.find('[name="password_confirm"]').val();

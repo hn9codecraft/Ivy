@@ -200,7 +200,7 @@ if ( class_exists( 'GFAPI' ) ) {
                 <div class="es-section-label">Contact &amp; Details</div>
                 <div class="es-card" style="padding:16px 18px;margin-bottom:18px;">
                     <div class="es-detail-row"><span>Email</span><div style="text-align:right;"><a href="mailto:<?php echo esc_attr( $student['email'] ); ?>"><?php echo esc_html( $student['email'] ); ?></a></div></div>
-                    <?php if ( ! empty( $student['phone'] ) ) : ?><div class="es-detail-row"><span>Phone</span><div style="text-align:right;"><?php echo esc_html( $student['phone'] ); ?></div></div><?php endif; ?>
+                    <div class="es-detail-row"><span>Phone</span><div style="text-align:right;"><?php echo ! empty( $student['phone'] ) ? esc_html( $student['phone'] ) : '<span style="color:#9ca3af;">—</span>'; ?></div></div>
                     <?php if ( ! empty( $student['parent_name'] ) ) : ?><div class="es-detail-row"><span>Parent</span><div style="text-align:right;"><?php echo esc_html( $student['parent_name'] ); ?></div></div><?php endif; ?>
                     <?php if ( ! empty( $student['reference'] ) ) : ?><div class="es-detail-row"><span>Reference</span><div style="text-align:right;"><?php echo esc_html( ucfirst( $student['reference'] ) ); ?></div></div><?php endif; ?>
                     <?php if ( ! empty( $student['comment'] ) ) : ?><div class="es-detail-row"><span>Comment</span><div style="text-align:right;"><?php echo esc_html( $student['comment'] ); ?></div></div><?php endif; ?>

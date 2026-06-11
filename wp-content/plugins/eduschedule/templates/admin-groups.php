@@ -1025,31 +1025,57 @@ body.es-modal-open{overflow:hidden}
 <!-- ============ Add/Edit Group Modal ============ -->
 <div class="es-modal" id="es-group-modal" style="display:none">
     <div class="es-modal-backdrop"></div>
-    <div class="es-modal-card">
-        <div class="es-modal-head">
-            <h2 id="es-group-modal-title">New Group</h2>
-            <button type="button" class="es-modal-close" aria-label="Close">×</button>
+    <div class="es-modal-card" style="max-width:580px;">
+        <div class="es-modal-head" style="background:linear-gradient(135deg,#6366f1 0%,#8b5cf6 100%);padding:24px 28px;">
+            <div>
+                <div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.75);margin-bottom:4px;">Groups</div>
+                <h2 id="es-group-modal-title" style="color:#fff;margin:0;font-size:22px;font-weight:700;letter-spacing:-.3px;">New Group</h2>
+            </div>
+            <button type="button" class="es-modal-close" aria-label="Close" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);color:#fff;border-radius:12px;width:36px;height:36px;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .15s;">×</button>
         </div>
-        <div class="es-modal-body">
+        <div class="es-modal-body" style="padding:28px;display:grid;gap:20px;">
             <input type="hidden" id="es-group-id" value="" />
+
             <div class="es-field">
-                <label class="es-label">Group Name</label>
-                <input type="text" id="es-group-name" placeholder="e.g. IELTS Batch A" />
+                <label class="es-label" style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#64748b;font-weight:700;display:block;margin-bottom:8px;">Group Name <span style="color:#e53e3e;">*</span></label>
+                <input type="text" id="es-group-name" placeholder="e.g. IELTS Batch A — June 2026"
+                    style="width:100%;border:1.5px solid #e2e8f0;border-radius:10px;padding:11px 14px;font-size:14px;background:#fff;transition:border-color .15s;box-sizing:border-box;" />
             </div>
+
             <div class="es-field">
-                <label class="es-label">Description</label>
-                <textarea id="es-group-notes" rows="3" placeholder="Optional group description..."></textarea>
-                <small class="es-helper" style="display:block;margin-top:5px;color:var(--es-text-muted);">Package and course are linked after a student purchases/selects a package through the Group flow.</small>
+                <label class="es-label" style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#64748b;font-weight:700;display:block;margin-bottom:8px;">Package <span style="color:#9ca3af;font-weight:400;text-transform:none;letter-spacing:0;">(optional — links sessions to this package)</span></label>
+                <select id="es-group-package" style="width:100%;border:1.5px solid #e2e8f0;border-radius:10px;padding:11px 14px;font-size:14px;background:#fff;cursor:pointer;box-sizing:border-box;">
+                    <option value="">— No package linked yet —</option>
+                    <?php foreach ( ES_Packages::get_all( true ) as $gp ) :
+                        $gp_type = ! empty( $gp->package_type ) ? $gp->package_type : '1to1';
+                        $gp_label = array( '1to1' => '1:1', 'group' => 'Group', 'consultancy' => 'Consultancy' )[ $gp_type ] ?? $gp_type;
+                    ?>
+                        <option value="<?php echo (int) $gp->id; ?>" data-sessions="<?php echo (int) ($gp->total_sessions ?? 0); ?>" data-months="<?php echo (int) ($gp->months ?? 1); ?>">
+                            [<?php echo esc_html( $gp_label ); ?>] <?php echo esc_html( $gp->package_name ); ?>
+                            (<?php echo (int) ($gp->total_sessions ?? 0); ?> sessions · <?php echo (int) ($gp->months ?? 1); ?> mo)
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+                <div id="es-group-pkg-preview" style="display:none;margin-top:10px;padding:10px 14px;background:#f5f3ff;border:1px solid #c4b5fd;border-radius:8px;font-size:13px;color:#5b21b6;"></div>
+            </div>
+
+            <div class="es-field">
+                <label class="es-label" style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#64748b;font-weight:700;display:block;margin-bottom:8px;">Description <span style="color:#9ca3af;font-weight:400;text-transform:none;letter-spacing:0;">(optional)</span></label>
+                <textarea id="es-group-notes" rows="3" placeholder="Optional notes about this batch, schedule, or focus area…"
+                    style="width:100%;border:1.5px solid #e2e8f0;border-radius:10px;padding:11px 14px;font-size:14px;background:#fff;resize:vertical;box-sizing:border-box;min-height:80px;"></textarea>
+            </div>
+
+            <div style="padding:12px 14px;background:#f8fafc;border:1px solid #e2e8f0;border-radius:10px;font-size:12px;color:#64748b;line-height:1.6;">
+                <strong style="color:#374151;">ℹ️ About packages:</strong> The selected package defines how many sessions each student gets. Individual per-student session counts are tracked automatically as attendance is marked.
             </div>
         </div>
-        <div class="es-modal-foot">
+        <div class="es-modal-foot" style="padding:18px 28px;background:#fafbff;border-top:1px solid #eef2f7;display:flex;justify-content:flex-end;gap:10px;">
             <button type="button" class="es-btn es-btn-ghost es-modal-close">Cancel</button>
-            <button type="button" class="es-btn es-btn-primary" id="es-group-save">
+            <button type="button" class="es-btn es-btn-primary" id="es-group-save" style="min-width:140px;">
                 <span id="es-group-save-text">Create Group</span>
             </button>
         </div>
     </div>
-
 </div>
 
 <?php if ( $detail_mode && $selected ) : ?>
@@ -1144,12 +1170,12 @@ jQuery(function($){
 
     /* ── Schedule modal ── */
     $(document).on('click', '.es-open-schedule-modal', function(){
-        $('#es-schedule-modal').addClass('is-open').attr('aria-hidden','false');
+        $('#es-schedule-modal').css('display','').addClass('is-open').attr('aria-hidden','false');
         $('body').addClass('es-modal-open');
         setTimeout(function(){ $('#es-ss-date').trigger('focus'); }, 80);
     });
     $(document).on('click', '.es-schedule-modal-close, .es-schedule-modal-overlay', function(){
-        $(this).closest('.es-schedule-modal').removeClass('is-open').attr('aria-hidden','true').hide();
+        $(this).closest('.es-schedule-modal').removeClass('is-open').attr('aria-hidden','true').css('display','none');
         $('body').removeClass('es-modal-open');
     });
 

@@ -274,6 +274,60 @@ class ES_Mailer {
     }
 
     /**
+     * Admin notification sent every time admin schedules a session (regardless
+     * of the notify_admin setting, since the admin IS the one scheduling).
+     * Mirrors send_booking_confirmation but is addressed to the admin.
+     */
+    public static function send_admin_booking_notification( $booking_id, $extra_comment = '' ) {
+        $admin_email = self::admin_recipient();
+        if ( ! is_email( $admin_email ) ) return false;
+
+        $b = ES_DB::get_booking( $booking_id );
+        if ( ! $b ) return false;
+        $slot = ES_DB::get_slot( $b->slot_id );
+        if ( ! $slot ) return false;
+        $user = get_userdata( $b->user_id );
+        if ( ! $user ) return false;
+
+        $brand   = get_bloginfo( 'name' );
+        $when    = esc_html( $slot->slot_date . ' ' . substr( $slot->start_time, 0, 5 ) . ' – ' . substr( $slot->end_time, 0, 5 ) );
+        $subject = sprintf( '[%s] Session Scheduled: %s — %s', $brand, $user->display_name, $when );
+
+        $rows  = '<tr><td style="padding:8px 0;color:#6b7280;font-size:13px;width:110px">Student</td><td style="padding:8px 0;font-weight:500">' . esc_html( $user->display_name ) . ' &lt;' . esc_html( $user->user_email ) . '&gt;</td></tr>';
+        $rows .= '<tr><td style="padding:8px 0;color:#6b7280;font-size:13px;border-top:1px solid #f0f0f3">When</td><td style="padding:8px 0;font-weight:500;border-top:1px solid #f0f0f3">' . $when . '</td></tr>';
+        $rows .= '<tr><td style="padding:8px 0;color:#6b7280;font-size:13px;border-top:1px solid #f0f0f3">Type</td><td style="padding:8px 0;font-weight:500;border-top:1px solid #f0f0f3">' . esc_html( ES_Helpers::slot_type_label( $slot->slot_type ) ) . '</td></tr>';
+        $rows .= '<tr><td style="padding:8px 0;color:#6b7280;font-size:13px;border-top:1px solid #f0f0f3">Platform</td><td style="padding:8px 0;font-weight:500;border-top:1px solid #f0f0f3">' . esc_html( $slot->platform ) . '</td></tr>';
+        if ( $slot->title ) {
+            $rows .= '<tr><td style="padding:8px 0;color:#6b7280;font-size:13px;border-top:1px solid #f0f0f3">Topic</td><td style="padding:8px 0;border-top:1px solid #f0f0f3">' . esc_html( $slot->title ) . '</td></tr>';
+        }
+        if ( ! empty( $b->zoom_join_url ) ) {
+            $rows .= '<tr><td style="padding:8px 0;color:#6b7280;font-size:13px;border-top:1px solid #f0f0f3">Zoom Host</td><td style="padding:8px 0;border-top:1px solid #f0f0f3"><a href="' . esc_url( $b->zoom_start_url ?: $b->zoom_join_url ) . '">' . esc_html( $b->zoom_start_url ?: $b->zoom_join_url ) . '</a></td></tr>';
+        }
+
+        $comment_block = '';
+        if ( $extra_comment !== '' ) {
+            $comment_block = '<div style="background:#f9fafb;border:1px solid #eef0f3;border-left:3px solid #e91e63;border-radius:8px;padding:14px 16px;margin:16px 0"><div style="font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Notes</div><div style="font-size:14px;color:#374151;line-height:1.6;white-space:pre-wrap">' . nl2br( esc_html( $extra_comment ) ) . '</div></div>';
+        }
+
+        $manage = admin_url( 'admin.php?page=eduschedule-bookings' );
+        $html = '<div style="font-family:-apple-system,Segoe UI,Roboto,sans-serif;max-width:600px;margin:0 auto;background:#f7f7f9;padding:24px">'
+              . '<div style="background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb">'
+              . '<div style="background:#e91e63;color:#fff;padding:20px 28px">'
+              . '<div style="font-size:12px;letter-spacing:.6px;opacity:.85;text-transform:uppercase">Session Scheduled</div>'
+              . '<div style="font-size:20px;font-weight:600;margin-top:4px">New session for ' . esc_html( $user->display_name ) . '</div>'
+              . '</div>'
+              . '<div style="padding:22px 28px;color:#222;font-size:15px">'
+              . '<table cellpadding="0" cellspacing="0" style="width:100%;border-collapse:collapse">' . $rows . '</table>'
+              . $comment_block
+              . '<div style="text-align:center;margin:20px 0 4px"><a href="' . esc_url( $manage ) . '" style="display:inline-block;background:#1e293b;color:#fff;padding:11px 24px;border-radius:8px;text-decoration:none;font-weight:600;font-size:14px">View Bookings</a></div>'
+              . '</div>'
+              . '<div style="padding:14px 28px;background:#fafafa;color:#9ca3af;font-size:12px;border-top:1px solid #f0f0f3">Sent from ' . esc_html( $brand ) . '</div>'
+              . '</div></div>';
+
+        return self::send( $admin_email, $subject, $html );
+    }
+
+    /**
      * After-Call email to the STUDENT (HTML).
      *
      * @param WP_User $user

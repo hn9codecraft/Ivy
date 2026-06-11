@@ -742,6 +742,7 @@ class ES_Admin_Ajax {
             'tagline'               => isset( $_POST['tagline'] ) ? sanitize_text_field( wp_unslash( $_POST['tagline'] ) ) : '',
             'description'           => isset( $_POST['description'] ) ? sanitize_textarea_field( wp_unslash( $_POST['description'] ) ) : '',
             'display_order'         => isset( $_POST['display_order'] ) ? (int) $_POST['display_order'] : 0,
+            'package_type'          => isset( $_POST['package_type'] ) && in_array( $_POST['package_type'], array( '1to1', 'group', 'consultancy' ), true ) ? sanitize_text_field( wp_unslash( $_POST['package_type'] ) ) : '1to1',
             'is_active'             => $is_active,
         );
         // price (total) and total_sessions are auto-computed by ES_Packages
@@ -1917,7 +1918,10 @@ class ES_Admin_Ajax {
                 $created[] = $bid;
                 if ( $send_email ) {
                     $sched_note = isset( $_POST['notes'] ) ? sanitize_textarea_field( wp_unslash( $_POST['notes'] ) ) : '';
+                    // Send to student
                     ES_Mailer::send_booking_confirmation( $bid, $sched_note );
+                    // Always send admin notification on admin-scheduled sessions
+                    ES_Mailer::send_admin_booking_notification( $bid, $sched_note );
                 }
             } else {
                 if ( ! empty( $bdata['zoom_meeting_id'] ) ) @ES_Zoom::delete_meeting( $bdata['zoom_meeting_id'] );

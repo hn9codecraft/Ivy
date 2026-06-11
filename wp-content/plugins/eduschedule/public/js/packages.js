@@ -325,6 +325,21 @@
             $detail.find('.es-tabpane[data-pane="' + tab + '"]').show();
         }
 
+        // Restore tab from URL hash after a post-schedule reload
+        (function() {
+            var hash = window.location.hash;
+            if (hash && hash.indexOf('#es-tab-') === 0) {
+                var hashTab = hash.replace('#es-tab-', '');
+                if (hashTab) {
+                    switchTab(hashTab);
+                    // Clean hash from URL without reloading
+                    if (window.history && window.history.replaceState) {
+                        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+                    }
+                }
+            }
+        })();
+
         // ── Attendance ──
         $detail.on('click', '.es-att-btn', function () {
             var $btn  = $(this);
@@ -755,16 +770,23 @@
                 }
                 var slotId = res.data && res.data.slot_id ? parseInt(res.data.slot_id, 10) : 0;
                 var n = queuedFiles ? queuedFiles.length : 0;
+                // Remember the active tab so we restore it after the page reload
+                var activeTab = $detail.find('.es-tab.is-active').data('tab') || 'schedule';
+                function reloadToTab() {
+                    var url = window.location.href.replace(/#.*/, '');
+                    window.location.href = url + '#es-tab-' + activeTab;
+                    window.location.reload();
+                }
                 if (slotId && n > 0) {
                     $msg.css('color', '#6366f1').text('Session created. Uploading ' + n + ' file' + (n === 1 ? '' : 's') + '…').show();
                     uploadQueuedFiles(queuedFiles, slotId, targetType, targetId, function(){
                         $msg.css('color', '#10b981').text('✓ Scheduled & files attached. Reloading…').show();
-                        setTimeout(function(){ window.location.reload(); }, 600);
+                        setTimeout(reloadToTab, 600);
                     });
                 } else {
                     $msg.css('color', '#10b981').text('✓ ' + res.data.message + ' Reloading…').show();
                     $('#es-ss-title, #es-ss-notes').val('');
-                    setTimeout(function(){ window.location.reload(); }, 700);
+                    setTimeout(reloadToTab, 700);
                 }
             },
             error: function () {
@@ -1352,6 +1374,7 @@
         $('#es-pkg-tagline').val('');
         $('#es-pkg-description').val('');
         $('#es-pkg-order').val('0');
+        $('#es-pkg-type').val('1to1');
         // Hidden field — packages are visible to students by default
         $('#es-pkg-active').val('1');
         recalcPackageTotals();
@@ -1413,6 +1436,7 @@
                     $('#es-pkg-tagline').val(p.tagline);
                     $('#es-pkg-description').val(p.description);
                     $('#es-pkg-order').val(p.display_order);
+                    $('#es-pkg-type').val(p.package_type || '1to1');
                     // Preserve existing active state silently (default 1)
                     $('#es-pkg-active').val(p.is_active == 0 ? '0' : '1');
                     recalcPackageTotals();
@@ -1456,6 +1480,7 @@
                 tagline: $('#es-pkg-tagline').val(),
                 description: $('#es-pkg-description').val(),
                 display_order: $('#es-pkg-order').val(),
+                package_type: $('#es-pkg-type').val() || '1to1',
                 is_active: parseInt($('#es-pkg-active').val(), 10) === 0 ? 0 : 1
             },
             success: function (res) {
@@ -1587,7 +1612,19 @@
         $('#es-group-id').val('');
         $('#es-group-name').val('');
         $('#es-group-notes').val('');
+        $('#es-group-package').val('');
+        $('#es-group-pkg-preview').hide().text('');
     }
+
+    // Show package preview when selecting a package in the group modal
+    $(document).on('change', '#es-group-package', function(){
+        var $opt = $(this).find('option:selected');
+        var $prev = $('#es-group-pkg-preview');
+        if (!$(this).val()) { $prev.hide().text(''); return; }
+        var sessions = $opt.data('sessions') || 0;
+        var months   = $opt.data('months') || 1;
+        $prev.text('📦 ' + $opt.text().replace(/^\[.*?\]\s*/, '') + ' — ' + sessions + ' sessions over ' + months + ' month' + (months > 1 ? 's' : '')).show();
+    });
 
     function loadGroupForEdit(id) {
         $.ajax({
@@ -1600,6 +1637,12 @@
                     $('#es-group-id').val(g.id);
                     $('#es-group-name').val(g.group_name);
                     $('#es-group-notes').val(g.notes || '');
+                    if (g.package_id) {
+                        $('#es-group-package').val(g.package_id).trigger('change');
+                    } else {
+                        $('#es-group-package').val('');
+                        $('#es-group-pkg-preview').hide().text('');
+                    }
                     $('#es-group-modal-title').text('Edit Group');
                     $('#es-group-save-text').text('Update Group');
                     $('#es-group-modal').fadeIn(200);
@@ -1627,7 +1670,8 @@
                 nonce: ES_ADMIN.nonce,
                 id: id,
                 group_name: name,
-                notes: $('#es-group-notes').val()
+                notes: $('#es-group-notes').val(),
+                package_id: $('#es-group-package').val() || ''
             },
             success: function (res) {
                 if (res.success) location.reload();

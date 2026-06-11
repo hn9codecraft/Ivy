@@ -68,6 +68,7 @@ class ES_Shortcodes {
             'nonce'         => wp_create_nonce( 'es_fe_nonce' ),         // generic nonce for booking, etc.
             'login_nonce'   => wp_create_nonce( 'es_login_nonce' ),      // dedicated login nonce
             'register_nonce'=> wp_create_nonce( 'es_register_nonce' ),   // dedicated register nonce
+            'reset_nonce'   => wp_create_nonce( 'es_frontend_reset' ),   // dedicated reset nonce
             'is_logged'     => is_user_logged_in(),
             'user_id'       => get_current_user_id(),
             'login_url'     => $this->page_url( 'login_page_id' ),

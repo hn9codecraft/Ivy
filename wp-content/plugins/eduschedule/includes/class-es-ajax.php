@@ -200,11 +200,20 @@ class ES_Ajax {
      */
     public function handle_lost_password() {
         $valid = false;
-        if ( isset( $_POST['nonce'] ) && (
-                wp_verify_nonce( sanitize_key( wp_unslash( $_POST['nonce'] ) ), 'es_login_nonce' ) ||
-                wp_verify_nonce( sanitize_key( wp_unslash( $_POST['nonce'] ) ), 'es_fe_nonce' )
-            ) ) {
-            $valid = true;
+        // Accept login nonce, generic fe nonce, or the dedicated reset-page nonce
+        if ( isset( $_POST['nonce'] ) ) {
+            $n = sanitize_key( wp_unslash( $_POST['nonce'] ) );
+            if ( wp_verify_nonce( $n, 'es_login_nonce' ) ||
+                 wp_verify_nonce( $n, 'es_fe_nonce' ) ||
+                 wp_verify_nonce( $n, 'es_frontend_reset' ) ) {
+                $valid = true;
+            }
+        }
+        // Also accept the hidden nonce field sent by the non-JS form fallback
+        if ( ! $valid && isset( $_POST['es_reset_nonce'] ) ) {
+            if ( wp_verify_nonce( sanitize_key( wp_unslash( $_POST['es_reset_nonce'] ) ), 'es_frontend_reset' ) ) {
+                $valid = true;
+            }
         }
         if ( ! $valid ) {
             wp_send_json_error( array( 'message' => 'Security check failed. Please refresh and try again.' ), 403 );
@@ -252,11 +261,18 @@ class ES_Ajax {
      */
     public function handle_reset_password() {
         $valid = false;
-        if ( isset( $_POST['nonce'] ) && (
-                wp_verify_nonce( sanitize_key( wp_unslash( $_POST['nonce'] ) ), 'es_login_nonce' ) ||
-                wp_verify_nonce( sanitize_key( wp_unslash( $_POST['nonce'] ) ), 'es_fe_nonce' )
-            ) ) {
-            $valid = true;
+        if ( isset( $_POST['nonce'] ) ) {
+            $n = sanitize_key( wp_unslash( $_POST['nonce'] ) );
+            if ( wp_verify_nonce( $n, 'es_login_nonce' ) ||
+                 wp_verify_nonce( $n, 'es_fe_nonce' ) ||
+                 wp_verify_nonce( $n, 'es_frontend_reset' ) ) {
+                $valid = true;
+            }
+        }
+        if ( ! $valid && isset( $_POST['es_reset_nonce'] ) ) {
+            if ( wp_verify_nonce( sanitize_key( wp_unslash( $_POST['es_reset_nonce'] ) ), 'es_frontend_reset' ) ) {
+                $valid = true;
+            }
         }
         if ( ! $valid ) {
             wp_send_json_error( array( 'message' => 'Security check failed. Please refresh and try again.' ), 403 );
