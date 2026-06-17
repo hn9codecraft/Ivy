@@ -22,14 +22,40 @@ $base = admin_url( 'admin.php?page=eduschedule-packages' );
         </div>
     </div>
 
+    <?php
+    // Split packages by type for sectioned display
+    $pkgs_1to1  = array();
+    $pkgs_group = array();
+    $pkgs_other = array();
+    if ( ! empty( $packages ) ) {
+        foreach ( $packages as $pkg ) {
+            $t = ! empty( $pkg->package_type ) ? $pkg->package_type : '1to1';
+            if ( $t === 'group' )      $pkgs_group[] = $pkg;
+            elseif ( $t === '1to1' )   $pkgs_1to1[]  = $pkg;
+            else                       $pkgs_other[] = $pkg;
+        }
+    }
+    ?>
+
+    <?php if ( empty( $packages ) ) : ?>
+        <div class="es-card" style="padding:40px;text-align:center;margin-top:24px;">
+            <p class="es-empty-cell">No packages created yet. Click "Add Package" to get started.</p>
+        </div>
+    <?php else : ?>
+
+    <!-- 1:1 Packages Section -->
+    <div class="es-pkg-section-label" style="margin-top:28px;margin-bottom:4px;display:flex;align-items:center;gap:10px;">
+        <span style="font-size:18px;font-weight:700;color:#6366f1;">🎯 1:1 Packages</span>
+        <span class="es-pill" style="background:#f3e8ff;color:#7c3aed;font-size:11px;"><?php echo count( $pkgs_1to1 ); ?></span>
+    </div>
     <div class="es-packages-grid">
-        <?php if ( empty( $packages ) ) : ?>
-            <div class="es-card" style="padding:40px;text-align:center">
-                <p class="es-empty-cell">No packages created yet. Click "Add Package" to get started.</p>
+        <?php if ( empty( $pkgs_1to1 ) ) : ?>
+            <div class="es-card" style="padding:24px;text-align:center;grid-column:1/-1;">
+                <p class="es-empty-cell">No 1:1 packages yet.</p>
             </div>
-        <?php else : foreach ( $packages as $pkg ) :
-            $pkg_type_raw   = ! empty( $pkg->package_type ) ? $pkg->package_type : '1to1';
-            $pkg_type_label = array( '1to1' => '1:1', 'group' => 'Group', 'consultancy' => 'Consultancy' )[ $pkg_type_raw ] ?? strtoupper( $pkg_type_raw );
+        <?php else : foreach ( $pkgs_1to1 as $pkg ) :
+            $pkg_type_raw   = '1to1';
+            $pkg_type_label = '1:1';
         ?>
             <div class="es-package-card <?php echo ! $pkg->is_active ? 'is-inactive' : ''; ?>" data-package-id="<?php echo (int) $pkg->id; ?>" data-package-type="<?php echo esc_attr( $pkg_type_raw ); ?>">
                 <div class="es-package-header">
@@ -173,6 +199,196 @@ $base = admin_url( 'admin.php?page=eduschedule-packages' );
             </div>
         <?php endforeach; endif; ?>
     </div>
+
+    <!-- Group Packages Section -->
+    <div class="es-pkg-section-label" style="margin-top:32px;margin-bottom:4px;display:flex;align-items:center;gap:10px;">
+        <span style="font-size:18px;font-weight:700;color:#10b981;">👥 Group Packages</span>
+        <span class="es-pill" style="background:#ecfdf5;color:#047857;font-size:11px;"><?php echo count( $pkgs_group ); ?></span>
+    </div>
+    <div class="es-packages-grid">
+        <?php if ( empty( $pkgs_group ) ) : ?>
+            <div class="es-card" style="padding:24px;text-align:center;grid-column:1/-1;">
+                <p class="es-empty-cell">No Group packages yet.</p>
+            </div>
+        <?php else : foreach ( $pkgs_group as $pkg ) :
+            $pkg_type_raw   = 'group';
+            $pkg_type_label = 'Group';
+        ?>
+            <div class="es-package-card <?php echo ! $pkg->is_active ? 'is-inactive' : ''; ?>" data-package-id="<?php echo (int) $pkg->id; ?>" data-package-type="<?php echo esc_attr( $pkg_type_raw ); ?>">
+                <div class="es-package-header">
+                    <div>
+                        <h3 class="es-package-name"><?php echo esc_html( $pkg->package_name ); ?></h3>
+                        <?php if ( ! empty( $pkg->sub_heading ) ) : ?>
+                            <p class="es-package-sub"><?php echo esc_html( $pkg->sub_heading ); ?></p>
+                        <?php endif; ?>
+                        <span class="es-pill" style="font-size:10px;margin-top:4px;display:inline-block;background:#ecfdf5;color:#047857;"><?php echo esc_html( $pkg_type_label ); ?></span>
+                    </div>
+                    <div class="es-package-actions">
+                        <button type="button" class="es-btn es-btn-sm es-btn-ghost es-edit-package" data-id="<?php echo (int) $pkg->id; ?>">
+                            Edit
+                        </button>
+                        <button type="button" class="es-btn es-btn-sm es-btn-danger es-delete-package" data-id="<?php echo (int) $pkg->id; ?>">
+                            ×
+                        </button>
+                    </div>
+                </div>
+
+                <div class="es-package-price">
+                    <?php
+                    $cur = ! empty( $pkg->currency ) ? $pkg->currency : 'INR';
+                    echo esc_html( ES_Helpers::format_price( $pkg->price, $cur ) );
+                    ?>
+                    <?php
+                    $pkg_months = max( 1, (int) ( $pkg->months ?? 1 ) );
+                    ?>
+                    <span class="es-package-period">/ <?php echo (int) $pkg_months; ?> month<?php echo $pkg_months > 1 ? 's' : ''; ?></span>
+                </div>
+
+                <?php if ( ! empty( $pkg->monthly_price ) ) : ?>
+                    <div class="es-package-hours">
+                        <span class="dashicons dashicons-money-alt"></span>
+                        <?php echo esc_html( ES_Helpers::format_price( $pkg->monthly_price, $cur ) ); ?> / month × <?php echo (int) $pkg_months; ?>
+                    </div>
+                <?php endif; ?>
+
+                <?php
+                $pkg_total_sessions = (int) ( $pkg->total_sessions ?? 0 );
+                $pkg_monthly_limit  = (int) ( $pkg->monthly_session_limit ?? 0 );
+                if ( $pkg_total_sessions > 0 || $pkg_monthly_limit > 0 ) :
+                ?>
+                    <div class="es-package-hours">
+                        <span class="dashicons dashicons-groups"></span>
+                        <?php echo (int) $pkg_total_sessions; ?> sessions
+                        <?php if ( $pkg_monthly_limit > 0 ) : ?>
+                            <small style="opacity:.75">(<?php echo (int) $pkg_monthly_limit; ?>/mo)</small>
+                        <?php endif; ?>
+                    </div>
+                <?php endif; ?>
+
+                <?php if ( ! empty( $pkg->discount_percent ) && ! empty( $pkg->discount_months ) ) : ?>
+                    <div class="es-package-hours">
+                        <span class="dashicons dashicons-tag"></span>
+                        <?php echo esc_html( rtrim( rtrim( number_format( (float) $pkg->discount_percent, 1 ), '0' ), '.' ) ); ?>% off for <?php echo (int) $pkg->discount_months; ?> month<?php echo (int) $pkg->discount_months > 1 ? 's' : ''; ?>
+                    </div>
+                <?php endif; ?>
+
+                <?php if ( ! empty( $pkg->description ) ) : ?>
+                    <div class="es-package-desc">
+                        <?php echo nl2br( esc_html( $pkg->description ) ); ?>
+                    </div>
+                <?php endif; ?>
+
+                <?php if ( ! $pkg->is_active ) : ?>
+                    <div class="es-package-status">
+                        <span class="es-pill es-pill-warning">Inactive</span>
+                    </div>
+                <?php endif; ?>
+
+                <?php
+                $pkg_videos = ES_Packages::get_package_videos( (int) $pkg->id );
+                $pkg_files  = ES_Packages::get_package_files( (int) $pkg->id );
+                ?>
+                <div class="es-pkgvids" data-package-id="<?php echo (int) $pkg->id; ?>">
+                    <div class="es-pkgvids-head">
+                        <div class="es-pkgvids-title">
+                            <span class="dashicons dashicons-portfolio"></span>
+                            Package Library
+                            <span class="es-pkgvids-count"><?php echo (int) ( count( $pkg_videos ) + count( $pkg_files ) ); ?></span>
+                        </div>
+                        <div style="display:inline-flex;gap:6px;">
+                            <input type="file" class="es-pkgfile-input" data-id="<?php echo (int) $pkg->id; ?>" accept=".pdf,.doc,.docx,.ppt,.pptx,.mp4,.mov,.webm,.mkv,.avi" style="display:none;" />
+                            <button type="button" class="es-btn es-btn-sm es-btn-ghost es-pkgfile-add" data-id="<?php echo (int) $pkg->id; ?>" title="Upload a file">
+                                <span class="dashicons dashicons-upload"></span> File
+                            </button>
+                            <button type="button" class="es-btn es-btn-sm es-btn-ghost es-pkgvid-add" data-id="<?php echo (int) $pkg->id; ?>" title="Pick a video from the media library">
+                                <span class="dashicons dashicons-format-video"></span> Video
+                            </button>
+                        </div>
+                    </div>
+                    <div class="es-pkgvids-progress" data-id="<?php echo (int) $pkg->id; ?>" style="display:none;font-size:12px;color:#a5b4fc;margin-bottom:8px;">Uploading…</div>
+                    <div class="es-pkgvids-grid">
+                        <?php if ( empty( $pkg_videos ) && empty( $pkg_files ) ) : ?>
+                            <p class="es-pkgvids-empty">No course materials yet.</p>
+                        <?php else : ?>
+                            <?php foreach ( $pkg_videos as $pv ) : ?>
+                                <div class="es-pkgvid-card" data-video-id="<?php echo (int) $pv->id; ?>">
+                                    <a href="<?php echo esc_url( $pv->video_url ); ?>" target="_blank" rel="noopener" class="es-pkgvid-thumb"><span class="es-pkgvid-play">▶</span></a>
+                                    <div class="es-pkgvid-meta">
+                                        <div class="es-pkgvid-title-row">
+                                            <span class="es-pkgvid-title"><?php echo esc_html( $pv->title ); ?></span>
+                                            <button type="button" class="es-pkgvid-del" data-id="<?php echo (int) $pv->id; ?>" aria-label="Delete">×</button>
+                                        </div>
+                                        <?php if ( ! empty( $pv->duration ) ) : ?>
+                                            <div class="es-pkgvid-dur">⏱ <?php echo esc_html( $pv->duration ); ?></div>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                            <?php foreach ( $pkg_files as $pf ) :
+                                $pf_size = $pf->file_size ? size_format( (int) $pf->file_size ) : '';
+                            ?>
+                                <div class="es-pkgvid-card es-pkgfile-card" data-file-id="<?php echo (int) $pf->id; ?>">
+                                    <a href="<?php echo esc_url( $pf->file_url ); ?>" target="_blank" rel="noopener" class="es-pkgfile-thumb"><span class="es-pkgfile-type"><?php echo esc_html( strtoupper( $pf->file_type ) ); ?></span></a>
+                                    <div class="es-pkgvid-meta">
+                                        <div class="es-pkgvid-title-row">
+                                            <span class="es-pkgvid-title"><?php echo esc_html( $pf->file_name ); ?></span>
+                                            <button type="button" class="es-pkgfile-del" data-id="<?php echo (int) $pf->id; ?>" aria-label="Delete">×</button>
+                                        </div>
+                                        <?php if ( $pf_size ) : ?>
+                                            <div class="es-pkgvid-dur"><?php echo esc_html( $pf_size ); ?></div>
+                                        <?php endif; ?>
+                                    </div>
+                                </div>
+                            <?php endforeach; ?>
+                        <?php endif; ?>
+                    </div>
+                </div>
+            </div>
+        <?php endforeach; endif; ?>
+    </div>
+
+    <?php if ( ! empty( $pkgs_other ) ) : ?>
+    <!-- Other Packages -->
+    <div class="es-pkg-section-label" style="margin-top:32px;margin-bottom:4px;display:flex;align-items:center;gap:10px;">
+        <span style="font-size:18px;font-weight:700;color:#8b5cf6;">💼 Other Packages</span>
+        <span class="es-pill" style="background:#f5f3ff;color:#6d28d9;font-size:11px;"><?php echo count( $pkgs_other ); ?></span>
+    </div>
+    <div class="es-packages-grid">
+        <?php foreach ( $pkgs_other as $pkg ) :
+            $pkg_type_raw   = ! empty( $pkg->package_type ) ? $pkg->package_type : '1to1';
+            $pkg_type_label = array( '1to1' => '1:1', 'group' => 'Group', 'consultancy' => 'Consultancy' )[ $pkg_type_raw ] ?? strtoupper( $pkg_type_raw );
+        ?>
+            <div class="es-package-card <?php echo ! $pkg->is_active ? 'is-inactive' : ''; ?>" data-package-id="<?php echo (int) $pkg->id; ?>" data-package-type="<?php echo esc_attr( $pkg_type_raw ); ?>">
+                <div class="es-package-header">
+                    <div>
+                        <h3 class="es-package-name"><?php echo esc_html( $pkg->package_name ); ?></h3>
+                        <?php if ( ! empty( $pkg->sub_heading ) ) : ?>
+                            <p class="es-package-sub"><?php echo esc_html( $pkg->sub_heading ); ?></p>
+                        <?php endif; ?>
+                        <span class="es-pill" style="font-size:10px;margin-top:4px;display:inline-block;background:#eef2ff;color:#3730a3;"><?php echo esc_html( $pkg_type_label ); ?></span>
+                    </div>
+                    <div class="es-package-actions">
+                        <button type="button" class="es-btn es-btn-sm es-btn-ghost es-edit-package" data-id="<?php echo (int) $pkg->id; ?>">Edit</button>
+                        <button type="button" class="es-btn es-btn-sm es-btn-danger es-delete-package" data-id="<?php echo (int) $pkg->id; ?>">×</button>
+                    </div>
+                </div>
+                <div class="es-package-price">
+                    <?php $cur = ! empty( $pkg->currency ) ? $pkg->currency : 'INR'; echo esc_html( ES_Helpers::format_price( $pkg->price, $cur ) ); ?>
+                    <?php $pkg_months = max( 1, (int) ( $pkg->months ?? 1 ) ); ?>
+                    <span class="es-package-period">/ <?php echo (int) $pkg_months; ?> month<?php echo $pkg_months > 1 ? 's' : ''; ?></span>
+                </div>
+                <?php if ( ! empty( $pkg->description ) ) : ?>
+                    <div class="es-package-desc"><?php echo nl2br( esc_html( $pkg->description ) ); ?></div>
+                <?php endif; ?>
+                <?php if ( ! $pkg->is_active ) : ?>
+                    <div class="es-package-status"><span class="es-pill es-pill-warning">Inactive</span></div>
+                <?php endif; ?>
+            </div>
+        <?php endforeach; ?>
+    </div>
+    <?php endif; ?>
+
+    <?php endif; /* empty packages */ ?>
 </div>
 
 <!-- Add/Edit Package Modal -->

@@ -398,7 +398,7 @@ class ES_Stripe {
         // total_sessions.
         $pkg_total = (int) ( $pkg->total_sessions ?? 0 );
         if ( $monthly_limit > 0 ) {
-            $total_sessions = $monthly_limit * $months;
+            $total_sessions = $monthly_limit * ( $months + 1 );
         } elseif ( $pkg_total > 0 ) {
             $total_sessions = $pkg_total;
         } else {

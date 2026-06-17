@@ -627,7 +627,7 @@ $yearly_discount_int = 0;
                             <?php if ( $total_sessions > 0 ) : ?>
                                 <div class="es-pp-bd-row" style="display:flex;justify-content:space-between;gap:10px;">
                                     <span>Sessions</span>
-                                    <strong><?php echo (int) $total_sessions; ?><?php if ( $monthly_limit > 0 ) : ?> <small style="opacity:.75">(<?php echo (int) $monthly_limit; ?> session/mo)</small><?php endif; ?></strong>
+                                    <strong class="es-pp-bd-sessions"><?php echo (int) $total_sessions; ?> session<?php echo $total_sessions !== 1 ? 's' : ''; ?><?php if ( $monthly_limit > 0 ) : ?> <small style="opacity:.75">(<?php echo (int) $monthly_limit; ?>/mo)</small><?php endif; ?></strong>
                                 </div>
                             <?php endif; ?>
                             <div class="es-pp-bd-row es-pp-bd-total" style="display:flex;justify-content:space-between;gap:10px;font-size:15px;margin-top:4px;padding-top:6px;border-top:1px solid rgba(128,128,128,.2);">

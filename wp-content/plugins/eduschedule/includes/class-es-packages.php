@@ -1027,13 +1027,17 @@ class ES_Packages {
         $payments = self::get_user_payments( $user_id, true, '1to1' );
         if ( empty( $payments ) ) return array();
 
-        $now = current_time( 'timestamp' );
-        $out = array();
+        $now     = current_time( 'timestamp' );
+        $pending = self::pending_sessions( $user_id ); // scheduled but not yet attended
+        $out     = array();
         foreach ( $payments as $p ) {
             if ( ! empty( $p->valid_until ) && strtotime( $p->valid_until ) < $now ) continue;
             $total = (int) ( $p->total_sessions ?? 0 );
             $used  = (int) ( $p->used_sessions ?? 0 );
-            $left  = max( 0, $total - $used );
+            // Subtract pending from the first (most recent / active) payment
+            // so the UI badge matches the template's effective_used display.
+            $left  = max( 0, $total - $used - $pending );
+            $pending = max( 0, $pending - max( 0, $total - $used ) ); // carry-over
             if ( $total > 0 && $left <= 0 ) continue;   // no sessions left
             $p->remaining = $left;
             $out[] = $p;
@@ -1107,11 +1111,53 @@ class ES_Packages {
     /**
      * Remaining sessions on a payment row (never below zero).
      */
-    public static function remaining_sessions( $payment ) {
+    /**
+     * Count confirmed 1:1 bookings that have NO attendance record yet
+     * (or status = 'none'). These are "pending" sessions — scheduled but
+     * not yet attended. They consume capacity so we don't over-schedule.
+     *
+     * @param int $user_id  WP user ID.
+     * @return int
+     */
+    public static function pending_sessions( $user_id ) {
+        global $wpdb;
+        $b = $wpdb->prefix . 'es_bookings';
+        $s = $wpdb->prefix . 'es_slots';
+        $a = $wpdb->prefix . 'es_attendance';
+        return (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(DISTINCT bk.slot_id)
+               FROM {$b} bk
+               INNER JOIN {$s} sl ON sl.id = bk.slot_id
+               LEFT  JOIN {$a} at ON at.slot_id  = bk.slot_id
+                                  AND at.user_id  = bk.user_id
+                                  AND (at.group_id IS NULL OR at.group_id = 0)
+              WHERE bk.user_id   = %d
+                AND bk.status    = 'confirmed'
+                AND sl.slot_type = '1to1'
+                AND (at.id IS NULL OR at.status NOT IN ('present','absent_unexcused','absent_excused'))",
+            (int) $user_id
+        ) );
+    }
+
+    /**
+     * Sessions remaining on a payment plan.
+     *
+     * When $user_id is supplied, scheduled-but-not-yet-attended bookings
+     * ("pending") are also subtracted so the number is consistent with the
+     * template's $effective_used display. Without $user_id the raw
+     * (total − used) value is returned (used in AJAX contexts where we
+     * already recomputed used_sessions from attendance).
+     *
+     * @param object   $payment  Payment row.
+     * @param int|null $user_id  Optional — pass to include pending offset.
+     * @return int
+     */
+    public static function remaining_sessions( $payment, $user_id = null ) {
         if ( ! $payment ) return 0;
-        $total = (int) ( $payment->total_sessions ?? 0 );
-        $used  = (int) ( $payment->used_sessions ?? 0 );
-        return max( 0, $total - $used );
+        $total   = (int) ( $payment->total_sessions ?? 0 );
+        $used    = (int) ( $payment->used_sessions ?? 0 );
+        $pending = $user_id ? self::pending_sessions( (int) $user_id ) : 0;
+        return max( 0, $total - $used - $pending );
     }
 
     /**
@@ -1939,7 +1985,7 @@ class ES_Packages {
 
     public static function get_group_renewable_packages( $group_id, $active_only = false ) {
         $group_id = (int) $group_id;
-        $packages = self::get_all( $active_only );
+        $packages = self::get_all( $active_only, 'group' ); // Only group-type packages
         if ( ! $group_id || ! self::get_group( $group_id ) ) return $packages;
 
         // Hide only packages that are still active for this group payment flow.

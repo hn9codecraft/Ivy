@@ -130,6 +130,15 @@ foreach ( (array) ES_Packages::get_user_groups( $current->ID ) as $grp ) {
                                     <div><span>Valid until</span><strong><?php echo esc_html( $valid_until ); ?></strong></div>
                                 <?php endif; ?>
                             </div>
+                            <?php
+                            // Show package description on frontend dashboard
+                            $fe_pkg_obj = ES_Packages::get( (int) $pay->package_id );
+                            if ( $fe_pkg_obj && ! empty( $fe_pkg_obj->description ) ) :
+                            ?>
+                                <div class="es-plan-desc" style="margin-top:14px;padding-top:14px;border-top:1px solid rgba(0,0,0,0.08);font-size:13px;line-height:1.6;color:#475569;white-space:pre-wrap;word-break:break-word;">
+                                    <?php echo nl2br( esc_html( $fe_pkg_obj->description ) ); ?>
+                                </div>
+                            <?php endif; ?>
                         </div>
                     <?php endforeach; ?>
                 </div>

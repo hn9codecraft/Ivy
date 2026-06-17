@@ -235,6 +235,54 @@ $detail_mode      = ! empty( $selected );
                     $g_sched_blocked = true;
                     $g_sched_reason  = 'No active group package with sessions left. Use the Renew tab to send a package-selection/payment link.';
                 }
+
+                // Per-member attendance & session counts (Point 3)
+                $member_stats = array();
+                foreach ( (array) $members as $m ) {
+                    $uid       = (int) $m->ID;
+                    $m_att_map = ES_Packages::get_attendance_map( $uid, (int) $selected->id );
+                    $m_present = 0; $m_absent_unexcused = 0; $m_absent_excused = 0; $m_none = 0;
+                    foreach ( $m_att_map as $slot_info ) {
+                        $s = ES_Packages::normalize_att_status( $slot_info['status'] ?? 'none' );
+                        if ( $s === 'present' )          $m_present++;
+                        elseif ( $s === 'absent_unexcused' ) $m_absent_unexcused++;
+                        elseif ( $s === 'absent_excused' )   $m_absent_excused++;
+                        else                             $m_none++;
+                    }
+                    $m_absent = $m_absent_unexcused + $m_absent_excused;
+                    // Per-member active payment for this group
+                    $m_payments   = ES_Packages::get_user_payments( $uid, true, 'group' );
+                    $m_active_pay = null;
+                    foreach ( $m_payments as $mp ) {
+                        if ( (int) ( $mp->group_id ?? 0 ) === (int) $selected->id ) {
+                            $left = max( 0, (int)$mp->total_sessions - (int)$mp->used_sessions );
+                            if ( $left > 0 || ! $m_active_pay ) { $m_active_pay = $mp; }
+                        }
+                    }
+                    // Use the member's own payment total if available;
+                    // otherwise fall back to the GROUP's current active payment total (not the sum of all payments)
+                    if ( $m_active_pay ) {
+                        $m_total = (int) $m_active_pay->total_sessions;
+                    } elseif ( $g_current_payment ) {
+                        $m_total = (int) $g_current_payment->total_sessions;
+                    } else {
+                        // Last resort: use the active single package total (not g_total which sums all payments)
+                        $m_total = $pkg ? (int) ( $pkg->total_sessions ?? 0 ) : 0;
+                    }
+                    // Sessions consumed = Present + Absent-without-permission (attendance-time model)
+                    $m_used  = $m_present + $m_absent_unexcused;
+                    $m_left  = max( 0, $m_total - $m_used );
+                    $member_stats[ $uid ] = array(
+                        'present'     => $m_present,
+                        'absent'      => $m_absent,
+                        'unmarked'    => $m_none,
+                        'total'       => $m_total,
+                        'used'        => $m_used,
+                        'left'        => $m_left,
+                        'pkg_name'    => $m_active_pay ? ( $m_active_pay->package_name ?: ( 'Package #' . $m_active_pay->package_id ) ) : ( $g_current_payment ? $g_current_payment->package_name : ( $pkg ? $pkg->package_name : '' ) ),
+                        'valid_until' => $m_active_pay && ! empty( $m_active_pay->valid_until ) ? date_i18n( 'M j, Y', strtotime( $m_active_pay->valid_until ) ) : ( $g_current_payment && ! empty( $g_current_payment->valid_until ) ? date_i18n( 'M j, Y', strtotime( $g_current_payment->valid_until ) ) : '' ),
+                    );
+                }
             ?>
                 <div class="es-tabui-detail" data-target-type="group" data-target-id="<?php echo (int) $selected->id; ?>">
 
@@ -438,10 +486,27 @@ $detail_mode      = ! empty( $selected );
                                     <div style="font-size:12.5px;color:#64748b;">Use the <strong>Renew</strong> tab to send a package-selection/payment link to group members. After payment, packages will show here.</div>
                                 </div>
                             <?php else : ?>
+                                <?php
+                                // Show only the current active package; tuck previous ones under a toggle
+                                $g_curr_payment_row = null;
+                                $g_prev_payments    = array();
+                                foreach ( $g_payments as $payRow ) {
+                                    if ( $g_current_payment && (int) $g_current_payment->id === (int) $payRow->id ) {
+                                        $g_curr_payment_row = $payRow;
+                                    } else {
+                                        $g_prev_payments[] = $payRow;
+                                    }
+                                }
+                                if ( ! $g_curr_payment_row && ! empty( $g_payments ) ) {
+                                    $g_curr_payment_row = $g_payments[0];
+                                    $g_prev_payments    = array_slice( $g_payments, 1 );
+                                }
+                                ?>
                                 <div class="es-pkgacc-wrap" style="margin-bottom:14px;">
-                                    <div class="es-section-label" style="margin-bottom:8px;">All Group Packages (<?php echo count( $g_payments ); ?>)</div>
+                                    <div class="es-section-label" style="margin-bottom:8px;">Active Package</div>
                                     <div class="es-pkgacc">
-                                        <?php foreach ( $g_payments as $i => $payRow ) :
+                                        <?php if ( $g_curr_payment_row ) :
+                                            $payRow  = $g_curr_payment_row;
                                             $payPkg  = ES_Packages::get( (int) $payRow->package_id );
                                             $p_total = (int) ( $payRow->total_sessions ?? 0 );
                                             $p_used  = (int) ( $payRow->used_sessions ?? 0 );
@@ -449,25 +514,24 @@ $detail_mode      = ! empty( $selected );
                                             $p_pct   = $p_total > 0 ? round( ( $p_used / $p_total ) * 100 ) : 0;
                                             $is_expired = ! empty( $payRow->valid_until ) && strtotime( $payRow->valid_until ) < $g_now_ts;
                                             $is_empty   = ( $p_total > 0 && $p_left <= 0 );
-                                            if ( $is_expired )      { $st_cls = 'es-pill-danger';  $st_txt = 'EXPIRED'; }
-                                            elseif ( $is_empty )    { $st_cls = 'es-pill-warning'; $st_txt = 'NO SESSIONS LEFT'; }
-                                            else                    { $st_cls = 'es-pill-success'; $st_txt = 'ACTIVE'; }
-                                            $is_current = $g_current_payment && (int) $g_current_payment->id === (int) $payRow->id;
+                                            if ( $is_expired )   { $st_cls = 'es-pill-danger';  $st_txt = 'EXPIRED'; }
+                                            elseif ( $is_empty ) { $st_cls = 'es-pill-warning'; $st_txt = 'NO SESSIONS LEFT'; }
+                                            else                 { $st_cls = 'es-pill-success'; $st_txt = 'ACTIVE'; }
                                             $pay_course_name = ! empty( $payRow->course_name ) ? $payRow->course_name : $g_course_names;
                                         ?>
-                                            <div class="es-pkgacc-row<?php echo $is_current ? ' is-current is-open' : ''; ?>">
-                                                <button type="button" class="es-pkgacc-head" aria-expanded="<?php echo $is_current ? 'true' : 'false'; ?>">
+                                            <div class="es-pkgacc-row is-current is-open">
+                                                <button type="button" class="es-pkgacc-head" aria-expanded="true">
                                                     <span class="es-pkgacc-caret">›</span>
                                                     <span class="es-pkgacc-name">
                                                         <?php echo esc_html( $payRow->package_name ? $payRow->package_name : ( 'Package #' . (int) $payRow->package_id ) ); ?>
-                                                        <?php if ( $is_current ) : ?><span class="es-pill es-pill-info" style="margin-left:6px;font-size:10px;">CURRENT</span><?php endif; ?>
+                                                        <span class="es-pill es-pill-info" style="margin-left:6px;font-size:10px;">CURRENT</span>
                                                     </span>
                                                     <span class="es-pkgacc-sub">
                                                         <?php echo (int) $p_used; ?> / <?php echo (int) $p_total; ?> used · <?php echo (int) $p_left; ?> left<?php if ( $pay_course_name ) : ?> · <?php echo esc_html( $pay_course_name ); ?><?php endif; ?>
                                                     </span>
                                                     <span class="es-pill <?php echo esc_attr( $st_cls ); ?>"><?php echo esc_html( $st_txt ); ?></span>
                                                 </button>
-                                                <div class="es-pkgacc-body" <?php echo $is_current ? '' : 'style="display:none;"'; ?>>
+                                                <div class="es-pkgacc-body">
                                                     <div class="es-package-detail-grid">
                                                         <div><span>Package</span><strong><?php echo esc_html( $payRow->package_name ? $payRow->package_name : '—' ); ?></strong></div>
                                                         <?php if ( $pay_course_name !== '' ) : ?><div><span>Course</span><strong><?php echo esc_html( $pay_course_name ); ?></strong></div><?php endif; ?>
@@ -487,8 +551,42 @@ $detail_mode      = ! empty( $selected );
                                                     <?php endif; ?>
                                                 </div>
                                             </div>
-                                        <?php endforeach; ?>
+                                        <?php endif; ?>
                                     </div>
+                                    <?php if ( ! empty( $g_prev_payments ) ) : ?>
+                                        <div style="margin-top:10px;">
+                                            <button type="button" class="es-btn es-btn-ghost es-btn-sm es-prev-pkgs-toggle" style="font-size:12px;color:#64748b;">
+                                                ▸ Previous packages (<?php echo count( $g_prev_payments ); ?>)
+                                            </button>
+                                            <div class="es-prev-pkgs-body es-pkgacc" style="display:none;margin-top:8px;">
+                                                <?php foreach ( $g_prev_payments as $payRow ) :
+                                                    $p_total = (int) ( $payRow->total_sessions ?? 0 );
+                                                    $p_used  = (int) ( $payRow->used_sessions ?? 0 );
+                                                    $p_left  = max( 0, $p_total - $p_used );
+                                                    $is_expired = ! empty( $payRow->valid_until ) && strtotime( $payRow->valid_until ) < $g_now_ts;
+                                                    if ( $is_expired || ( $p_total > 0 && $p_left <= 0 ) ) { $st_cls = 'es-pill-danger'; $st_txt = $is_expired ? 'EXPIRED' : 'DONE'; }
+                                                    else { $st_cls = 'es-pill-success'; $st_txt = 'ACTIVE'; }
+                                                ?>
+                                                    <div class="es-pkgacc-row" style="opacity:.7;margin-bottom:6px;">
+                                                        <button type="button" class="es-pkgacc-head" aria-expanded="false">
+                                                            <span class="es-pkgacc-caret">›</span>
+                                                            <span class="es-pkgacc-name"><?php echo esc_html( $payRow->package_name ?: 'Package #' . (int) $payRow->package_id ); ?></span>
+                                                            <span class="es-pkgacc-sub"><?php echo (int) $p_used; ?> / <?php echo (int) $p_total; ?> used · <?php echo (int) $p_left; ?> left</span>
+                                                            <span class="es-pill <?php echo esc_attr( $st_cls ); ?>"><?php echo esc_html( $st_txt ); ?></span>
+                                                        </button>
+                                                        <div class="es-pkgacc-body" style="display:none;">
+                                                            <div class="es-package-detail-grid">
+                                                                <div><span>Total</span><strong><?php echo (int) $p_total; ?></strong></div>
+                                                                <div><span>Used</span><strong><?php echo (int) $p_used; ?></strong></div>
+                                                                <div><span>Remaining</span><strong><?php echo (int) $p_left; ?></strong></div>
+                                                                <?php if ( ! empty( $payRow->valid_until ) ) : ?><div><span>Valid Until</span><strong><?php echo esc_html( date_i18n( 'M j, Y', strtotime( $payRow->valid_until ) ) ); ?></strong></div><?php endif; ?>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                <?php endforeach; ?>
+                                            </div>
+                                        </div>
+                                    <?php endif; ?>
                                 </div>
                             <?php endif; ?>
 
@@ -680,13 +778,96 @@ $detail_mode      = ! empty( $selected );
                             </div>
                             <?php if ( empty( $members ) ) : ?>
                                 <p class="es-empty-cell">No members yet.</p>
-                            <?php else : foreach ( $members as $m ) : $mi = strtoupper( substr( $m->display_name, 0, 2 ) ); ?>
-                                <div class="es-member-item">
-                                    <div class="es-tabui-avatar" style="width:32px;height:32px;background:<?php echo esc_attr( $color ); ?>22;color:<?php echo esc_attr( $color ); ?>;font-size:11px;"><?php echo esc_html( $mi ); ?></div>
-                                    <div style="flex:1;min-width:0;"><div class="es-member-name"><?php echo esc_html( $m->display_name ); ?></div><div class="es-member-email"><?php echo esc_html( $m->user_email ); ?></div></div>
-                                    <button type="button" class="es-btn es-btn-danger es-btn-sm es-remove-member-btn" data-group="<?php echo (int) $selected->id; ?>" data-user="<?php echo (int) $m->ID; ?>">Remove</button>
+                            <?php else : ?>
+                                <!-- Table view for individual student-wise package details -->
+                                <div class="es-card es-card-flush" style="overflow-x:auto;">
+                                    <table class="es-table" style="width:100%;min-width:700px;">
+                                        <thead>
+                                            <tr>
+                                                <th>Student</th>
+                                                <th>Package</th>
+                                                <th style="text-align:center;">Present</th>
+                                                <th style="text-align:center;">Absent</th>
+                                                <th style="text-align:center;">Unmarked</th>
+                                                <th style="text-align:center;">Used</th>
+                                                <th style="text-align:center;">Remaining</th>
+                                                <th style="text-align:center;">Total</th>
+                                                <th>Valid Until</th>
+                                                <th></th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <?php foreach ( $members as $m ) :
+                                                $mi   = strtoupper( substr( $m->display_name, 0, 2 ) );
+                                                $muid = (int) $m->ID;
+                                                $mst  = isset( $member_stats[ $muid ] ) ? $member_stats[ $muid ] : array( 'present'=>0,'absent'=>0,'unmarked'=>0,'total'=>0,'used'=>0,'left'=>0,'pkg_name'=>'','valid_until'=>'' );
+                                                $m_pct = $mst['total'] > 0 ? round( ( $mst['used'] / $mst['total'] ) * 100 ) : 0;
+                                            ?>
+                                                <tr>
+                                                    <td>
+                                                        <div class="es-cell-user">
+                                                            <div class="es-tabui-avatar" style="width:32px;height:32px;flex-shrink:0;background:<?php echo esc_attr( $color ); ?>22;color:<?php echo esc_attr( $color ); ?>;font-size:11px;"><?php echo esc_html( $mi ); ?></div>
+                                                            <div style="min-width:0;">
+                                                                <div class="es-cell-user-name"><?php echo esc_html( $m->display_name ); ?></div>
+                                                                <div style="font-size:11px;color:var(--es-text-muted);"><?php echo esc_html( $m->user_email ); ?></div>
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                    <td>
+                                                        <?php if ( $mst['pkg_name'] ) : ?>
+                                                            <span style="font-size:12px;color:#7c3aed;">📦 <?php echo esc_html( $mst['pkg_name'] ); ?></span>
+                                                        <?php else : ?>
+                                                            <span style="color:var(--es-text-muted);">—</span>
+                                                        <?php endif; ?>
+                                                    </td>
+                                                    <td style="text-align:center;">
+                                                        <span style="padding:3px 8px;background:#d1fae5;color:#065f46;border-radius:5px;font-weight:600;font-size:12px;">✓ <?php echo (int)$mst['present']; ?></span>
+                                                    </td>
+                                                    <td style="text-align:center;">
+                                                        <span style="padding:3px 8px;background:#fee2e2;color:#b91c1c;border-radius:5px;font-weight:600;font-size:12px;">✗ <?php echo (int)$mst['absent']; ?></span>
+                                                    </td>
+                                                    <td style="text-align:center;">
+                                                        <?php if ( $mst['unmarked'] > 0 ) : ?>
+                                                            <span style="padding:3px 8px;background:#f3f4f6;color:#6b7280;border-radius:5px;font-size:12px;">— <?php echo (int)$mst['unmarked']; ?></span>
+                                                        <?php else : ?>
+                                                            <span style="color:var(--es-text-muted);">0</span>
+                                                        <?php endif; ?>
+                                                    </td>
+                                                    <td style="text-align:center;">
+                                                        <strong style="font-size:13px;"><?php echo (int)$mst['used']; ?></strong>
+                                                    </td>
+                                                    <td style="text-align:center;">
+                                                        <strong style="font-size:13px;color:#16a34a;"><?php echo (int)$mst['left']; ?></strong>
+                                                        <?php if ( $mst['total'] > 0 ) : ?>
+                                                            <div style="width:50px;margin:4px auto 0;">
+                                                                <div style="height:4px;background:#e5e7eb;border-radius:3px;overflow:hidden;"><div style="height:100%;width:<?php echo (int)$m_pct; ?>%;background:<?php echo esc_attr( $color ); ?>;border-radius:3px;"></div></div>
+                                                            </div>
+                                                        <?php endif; ?>
+                                                    </td>
+                                                    <td style="text-align:center;">
+                                                        <?php if ( $mst['total'] > 0 ) : ?>
+                                                            <strong style="font-size:13px;"><?php echo (int)$mst['total']; ?></strong>
+                                                        <?php else : ?>
+                                                            <span style="color:var(--es-text-muted);">—</span>
+                                                        <?php endif; ?>
+                                                    </td>
+                                                    <td>
+                                                        <?php if ( $mst['valid_until'] ) : ?>
+                                                            <span style="font-size:11.5px;color:var(--es-text-muted);"><?php echo esc_html( $mst['valid_until'] ); ?></span>
+                                                        <?php else : ?>
+                                                            <span style="color:var(--es-text-muted);">—</span>
+                                                        <?php endif; ?>
+                                                    </td>
+                                                    <td style="text-align:right;white-space:nowrap;">
+                                                        <a href="<?php echo esc_url( admin_url( 'admin.php?page=eduschedule-1to1&user_id=' . $muid ) ); ?>" class="es-btn es-btn-ghost es-btn-sm" title="View 1:1 profile">👤</a>
+                                                        <button type="button" class="es-btn es-btn-danger es-btn-sm es-remove-member-btn" data-group="<?php echo (int) $selected->id; ?>" data-user="<?php echo (int) $m->ID; ?>">Remove</button>
+                                                    </td>
+                                                </tr>
+                                            <?php endforeach; ?>
+                                        </tbody>
+                                    </table>
                                 </div>
-                            <?php endforeach; endif; ?>
+                            <?php endif; ?>
                         </div>
 
                         <!-- RENEW TAB -->
@@ -778,34 +959,6 @@ $detail_mode      = ! empty( $selected );
                             </div>
 
                             <!-- Add Student to Group (admin-only, no payment) -->
-                            <div class="es-section-label" style="margin:20px 0 10px;">Add Student to This Group</div>
-                            <p style="font-size:13px;color:var(--es-text-muted);margin:0 0 14px;line-height:1.5;">
-                                Manually add any registered student to this group without sending a payment link. Their existing 1:1 data remains unchanged.
-                            </p>
-                            <div class="es-card" style="padding:18px 20px;">
-                                <div class="es-field" style="margin-bottom:14px;">
-                                    <label class="es-label">Select Student</label>
-                                    <select id="es-grp-add-student" style="width:100%;padding:9px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:14px;">
-                                        <option value="">— Choose a student —</option>
-                                        <?php
-                                        // Offer ALL registered users except existing members of this group
-                                        $existing_member_ids = array_map( function($m){ return (int) $m->ID; }, $members );
-                                        $all_site_users = get_users( array( 'role__not_in' => array( 'administrator' ), 'number' => 500, 'orderby' => 'display_name', 'order' => 'ASC' ) );
-                                        foreach ( $all_site_users as $su ) :
-                                            if ( in_array( (int) $su->ID, $existing_member_ids, true ) ) continue;
-                                        ?>
-                                            <option value="<?php echo (int) $su->ID; ?>"><?php echo esc_html( $su->display_name . ' (' . $su->user_email . ')' ); ?></option>
-                                        <?php endforeach; ?>
-                                    </select>
-                                </div>
-                                <div id="es-grp-add-msg" style="display:none;font-size:13px;margin-bottom:10px;padding:8px 12px;border-radius:8px;"></div>
-                                <div style="display:flex;justify-content:flex-end;">
-                                    <button type="button" class="es-btn es-btn-primary" id="es-grp-add-submit" data-group-id="<?php echo (int) $selected->id; ?>">
-                                        <span class="dashicons dashicons-groups" style="font-size:16px;width:16px;height:16px;vertical-align:text-bottom;margin-right:4px;"></span>
-                                        Add to Group
-                                    </button>
-                                </div>
-                            </div>
                         </div>
 
                         <!-- SCHEDULE MODAL (group) -->
@@ -1043,15 +1196,12 @@ body.es-modal-open{overflow:hidden}
             </div>
 
             <div class="es-field">
-                <label class="es-label" style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#64748b;font-weight:700;display:block;margin-bottom:8px;">Package <span style="color:#9ca3af;font-weight:400;text-transform:none;letter-spacing:0;">(optional — links sessions to this package)</span></label>
+                <label class="es-label" style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#64748b;font-weight:700;display:block;margin-bottom:8px;">Package <span style="color:#9ca3af;font-weight:400;text-transform:none;letter-spacing:0;">(group packages only — links sessions to this package)</span></label>
                 <select id="es-group-package" style="width:100%;border:1.5px solid #e2e8f0;border-radius:10px;padding:11px 14px;font-size:14px;background:#fff;cursor:pointer;box-sizing:border-box;">
                     <option value="">— No package linked yet —</option>
-                    <?php foreach ( ES_Packages::get_all( true ) as $gp ) :
-                        $gp_type = ! empty( $gp->package_type ) ? $gp->package_type : '1to1';
-                        $gp_label = array( '1to1' => '1:1', 'group' => 'Group', 'consultancy' => 'Consultancy' )[ $gp_type ] ?? $gp_type;
-                    ?>
+                    <?php foreach ( ES_Packages::get_all( true, 'group' ) as $gp ) : ?>
                         <option value="<?php echo (int) $gp->id; ?>" data-sessions="<?php echo (int) ($gp->total_sessions ?? 0); ?>" data-months="<?php echo (int) ($gp->months ?? 1); ?>">
-                            [<?php echo esc_html( $gp_label ); ?>] <?php echo esc_html( $gp->package_name ); ?>
+                            <?php echo esc_html( $gp->package_name ); ?>
                             (<?php echo (int) ($gp->total_sessions ?? 0); ?> sessions · <?php echo (int) ($gp->months ?? 1); ?> mo)
                         </option>
                     <?php endforeach; ?>
@@ -1384,36 +1534,17 @@ jQuery(function($){
         });
     });
 
+    /* ── Previous packages toggle ── */
+    $(document).on('click', '.es-prev-pkgs-toggle', function(){
+        var $body = $(this).next('.es-prev-pkgs-body');
+        var open = $body.is(':visible');
+        $body.slideToggle(150);
+        $(this).text( open ? '▸ Previous packages (' + $body.find('.es-pkgacc-row').length + ')' : '▾ Previous packages (' + $body.find('.es-pkgacc-row').length + ')' );
+    });
+
     if ($.fn.select2 && $('#es-grp-renew-course').length) {
         $('#es-grp-renew-course').select2({ placeholder: 'Search course…', width: '100%', allowClear: true });
     }
-
-    /* ── Add Student to Group (Purchase tab) ── */
-    $(document).on('click', '#es-grp-add-submit', function(){
-        var groupId = $(this).data('group-id');
-        var userId  = $('#es-grp-add-student').val();
-        if (!userId) { $('#es-grp-add-msg').css({display:'block',background:'#fee2e2',color:'#b91c1c'}).text('Please select a student.'); return; }
-        var $btn = $(this).prop('disabled', true).text('Adding…');
-        $.post(ES_ADMIN.ajax_url, {
-            action: 'es_admin_add_group_member',
-            nonce: ES_ADMIN.nonce,
-            group_id: groupId,
-            user_id: userId
-        }).done(function(res){
-            $btn.prop('disabled', false).text('Add to Group');
-            if (res && res.success) {
-                $('#es-grp-add-msg').css({display:'block',background:'#d1fae5',color:'#065f46'}).text((res.data && res.data.message) || 'Student added successfully.');
-                // Remove student from dropdown so they can't be added twice
-                $('#es-grp-add-student option[value="' + userId + '"]').remove();
-                $('#es-grp-add-student').val('');
-            } else {
-                $('#es-grp-add-msg').css({display:'block',background:'#fee2e2',color:'#b91c1c'}).text((res && res.data && res.data.message) || 'Could not add student.');
-            }
-        }).fail(function(){
-            $btn.prop('disabled', false).text('Add to Group');
-            $('#es-grp-add-msg').css({display:'block',background:'#fee2e2',color:'#b91c1c'}).text('Server error.');
-        });
-    });
 
     /* ── Course Select2 ── */
     if ($.fn.select2 && $('#es-group-course-select').length && !$('#es-group-course-select').prop('disabled')) {

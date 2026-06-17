@@ -126,7 +126,7 @@ if ( class_exists( 'GFAPI' ) ) {
     <div class="es-page-head">
         <div>
             <p class="es-page-sub" style="margin-bottom:6px">
-                <a href="<?php echo esc_url( $back_url ); ?>" class="es-back-link">&larr; Back to Students</a>
+                <a href="<?php echo esc_url( $back_url ); ?>" class="es-back-link">← Back to Students</a>
             </p>
             <h1>Student Detail</h1>
             <p class="es-page-sub"><?php echo esc_html( $student['email'] ); ?></p>
@@ -197,7 +197,7 @@ if ( class_exists( 'GFAPI' ) ) {
                     <div><div class="es-usage-stat-val is-left"><?php echo (int) $stats['past']; ?></div><div class="es-usage-stat-label">Past</div></div>
                 </div>
 
-                <div class="es-section-label">Contact &amp; Details</div>
+                <div class="es-section-label">Contact & Details</div>
                 <div class="es-card" style="padding:16px 18px;margin-bottom:18px;">
                     <div class="es-detail-row"><span>Email</span><div style="text-align:right;"><a href="mailto:<?php echo esc_attr( $student['email'] ); ?>"><?php echo esc_html( $student['email'] ); ?></a></div></div>
                     <div class="es-detail-row"><span>Phone</span><div style="text-align:right;"><?php echo ! empty( $student['phone'] ) ? esc_html( $student['phone'] ) : '<span style="color:#9ca3af;">—</span>'; ?></div></div>
@@ -305,14 +305,19 @@ if ( class_exists( 'GFAPI' ) ) {
                             <?php else : foreach ( $all_packages as $pkg ) :
                                 $cur = ! empty( $pkg->currency ) ? $pkg->currency : 'INR';
                                 $pkg_owned = in_array( (int) $pkg->id, $owned_active_ids, true );
+                                $pkg_type  = ! empty( $pkg->package_type ) ? $pkg->package_type : '1to1';
+                                $pkg_type_label = array( '1to1' => '1:1', 'group' => 'Group', 'consultancy' => 'Consultancy' )[ $pkg_type ] ?? $pkg_type;
                             ?>
-                                <label style="display:flex;align-items:center;gap:8px;cursor:<?php echo $pkg_owned ? 'not-allowed' : 'pointer'; ?>;font-size:13px;<?php echo $pkg_owned ? 'opacity:0.55;' : ''; ?>"
+                                <label class="es-pkg-check-row" data-pkg-type="<?php echo esc_attr( $pkg_type ); ?>"
+                                       style="display:flex;align-items:center;gap:8px;cursor:<?php echo $pkg_owned ? 'not-allowed' : 'pointer'; ?>;font-size:13px;<?php echo $pkg_owned ? 'opacity:0.55;' : ''; ?>"
                                        <?php if ( $pkg_owned ) : ?>title="Student already has this plan active"<?php endif; ?>>
                                     <input type="checkbox" class="es-pkg-check" value="<?php echo (int) $pkg->id; ?>"
+                                           data-pkg-type="<?php echo esc_attr( $pkg_type ); ?>"
                                            <?php checked( ! $pkg_owned && in_array( (int) $pkg->id, $staged_ids, true ) ); ?>
                                            <?php disabled( $pkg_owned ); ?> />
                                     <span>
                                         <strong><?php echo esc_html( $pkg->package_name ); ?></strong>
+                                        <span style="font-size:10px;padding:1px 5px;border-radius:4px;background:<?php echo $pkg_type === 'group' ? '#dbeafe' : '#f3e8ff'; ?>;color:<?php echo $pkg_type === 'group' ? '#1d4ed8' : '#7c3aed'; ?>;margin-left:4px;"><?php echo esc_html( $pkg_type_label ); ?></span>
                                         <?php if ( $pkg->price > 0 ) : ?><span style="opacity:0.7"> — <?php echo esc_html( ES_Helpers::format_price( $pkg->price, $cur ) ); ?></span><?php endif; ?>
                                         <?php if ( $pkg_owned ) : ?><span class="es-pill es-pill-success" style="margin-left:6px;font-size:10px;vertical-align:middle;">ACTIVE</span><?php endif; ?>
                                     </span>
@@ -333,7 +338,7 @@ if ( class_exists( 'GFAPI' ) ) {
 
                     <div style="margin-top:14px;display:flex;gap:10px;justify-content:flex-end;">
                         <button type="button" class="es-btn es-btn-primary" id="es-after-call-submit">
-                            <span class="dashicons dashicons-yes" style="font-size:16px"></span> Submit &amp; Convert
+                            <span class="dashicons dashicons-yes" style="font-size:16px"></span> Submit & Convert
                         </button>
                     </div>
                 </div>

@@ -9,7 +9,7 @@
 
 if ( ! defined( 'ABSPATH' ) ) exit;
 
-define( 'ES_VERSION', '4.7.1' );
+define( 'ES_VERSION', '4.7.9' );
 define( 'ES_DB_VERSION', '2.0.6' ); // bump when DB schema changes
 define( 'ES_FILE', __FILE__ );
 define( 'ES_DIR', plugin_dir_path( __FILE__ ) );
