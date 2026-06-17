@@ -22,7 +22,7 @@ if ($course_id && get_post_status($course_id)):
     <div>
     <?php 
 	    if (!is_user_logged_in()) {
-	 		echo '<div class="login-page">' . do_shortcode('[eduschedule_login]') . '</div>';
+	 		echo '<div class="login-page">' . do_shortcode('[eduschedule_auth]') . '</div>';
 	    } else {
 
 	        $rows = get_field('course_relationship', 'options');

@@ -14,15 +14,16 @@ define( 'WP_CACHE', false );
  *
  * @package WordPress
  */
+define('WP_REDIS_DISABLED', true);
 // ** MySQL settings - You can get this info from your web host ** //
 /** The name of the database for WordPress */
 define('DB_NAME', 'nnugfnzmph');
 /** MySQL database username */
-define('DB_USER', 'nnugfnzmph');
+define('DB_USER', 'root');
 /** MySQL database password */
-define('DB_PASSWORD', 'ZsnyN5kgxq');
+define('DB_PASSWORD', '');
 /** MySQL hostname */
-define('DB_HOST', 'localhost:/run/mysqld/mysqld.sock');
+define('DB_HOST', 'localhost');
 /** Database Charset to use in creating database tables. */
 define('DB_CHARSET', 'utf8');
 /** The Database Collate type. Don't change this if in doubt. */
@@ -32,7 +33,7 @@ define('DB_COLLATE', '');
  * Change these to different unique phrases!
  * You can generate these using the {@link https://api.wordpress.org/secret-key/1.1/salt/ WordPress.org secret-key service}
  */
-require('wp-salt.php');
+//require('wp-salt.php');
 /**
  * WordPress Database Table prefix.
  *
@@ -60,7 +61,8 @@ define('FS_CHMOD_FILE', (0664 & ~ umask()));
  * in their development environments.
  */
 define('WP_DEBUG', false);
-define( 'WP_REDIS_CONFIG', [
+
+/*define( 'WP_REDIS_CONFIG', [
    'token' => "e279430effe043b8c17d3f3c751c4c0846bc70c97f0eaaea766b4079001c",
    'host' => '127.0.0.1',
    'username' => "nnugfnzmph",
@@ -79,6 +81,7 @@ define( 'WP_REDIS_CONFIG', [
    'save_commands' => false,
    'prefix' => "nnugfnzmph:",  
    ] );
+
 define( 'WP_REDIS_DISABLED', false );
 /* That's all, stop editing! Happy blogging. */
 /** Absolute path to the WordPress directory. */

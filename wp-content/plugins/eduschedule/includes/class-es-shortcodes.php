@@ -41,6 +41,7 @@ class ES_Shortcodes {
         add_shortcode( 'eduschedule_packages',     array( $this, 'packages' ) );
         add_shortcode( 'course_booking_calendar',  array( $this, 'public_calendar' ) );
         add_shortcode( 'eduschedule_calendar',     array( $this, 'public_calendar' ) );
+        add_shortcode( 'es_course_listing',        array( $this, 'course_listing' ) );
     }
 
     public function enqueue() {
@@ -68,6 +69,7 @@ class ES_Shortcodes {
             'nonce'         => wp_create_nonce( 'es_fe_nonce' ),         // generic nonce for booking, etc.
             'login_nonce'   => wp_create_nonce( 'es_login_nonce' ),      // dedicated login nonce
             'register_nonce'=> wp_create_nonce( 'es_register_nonce' ),   // dedicated register nonce
+            'reset_nonce'   => wp_create_nonce( 'es_frontend_reset' ),   // dedicated reset nonce
             'is_logged'     => is_user_logged_in(),
             'user_id'       => get_current_user_id(),
             'login_url'     => $this->page_url( 'login_page_id' ),
@@ -527,6 +529,282 @@ class ES_Shortcodes {
 
         ob_start();
         include ES_DIR . 'templates/public-packages.php';
+        return ob_get_clean();
+    }
+
+    /**
+     * Course listing shortcode — displays all published 'course' CPT posts in
+     * the card-list layout matching the site design (thumbnail, title, short
+     * description, rating stars, creator, badge pills, Demo button).
+     *
+     * ACF fields used (from scf-export):
+     *   course_short_description  – textarea
+     *   rating                    – number (0–5, step 0.1)
+     *   course_created_by         – text
+     *
+     * Badges are driven by the post's category terms (or custom taxonomy
+     * 'course_badge'). If neither exists the pill row is hidden.
+     *
+     * Usage:
+     *   [es_course_listing]
+     *   [es_course_listing posts_per_page="12" orderby="title" order="ASC" category="ielts"]
+     *   [es_course_listing demo_label="Book Demo" demo_url="/book-demo"]
+     *
+     * @param  array  $atts  Shortcode attributes.
+     * @return string        HTML output.
+     */
+    public function course_listing( $atts = array() ) {
+        $atts = shortcode_atts( array(
+            'posts_per_page' => -1,
+            'orderby'        => 'menu_order',
+            'order'          => 'ASC',
+            'category'       => '',   // slug of a category/term to filter by
+            'demo_label'     => 'Demo',
+            'demo_url'       => '',   // override link; empty = single post permalink
+            'show_filter'    => 'yes', // yes|no — show left sidebar category filter
+        ), $atts, 'es_course_listing' );
+
+        // Determine which taxonomy to use for filtering
+        $filter_tax = taxonomy_exists( 'course_category' ) ? 'course_category' : 'category';
+
+        $query_args = array(
+            'post_type'      => 'course',
+            'post_status'    => 'publish',
+            'posts_per_page' => (int) $atts['posts_per_page'],
+            'orderby'        => sanitize_key( $atts['orderby'] ),
+            'order'          => strtoupper( $atts['order'] ) === 'DESC' ? 'DESC' : 'ASC',
+            'no_found_rows'  => true,
+        );
+
+        // Optional taxonomy filter (supports both 'category' and 'course_category')
+        if ( ! empty( $atts['category'] ) ) {
+            $query_args['tax_query'] = array(
+                array(
+                    'taxonomy' => $filter_tax,
+                    'field'    => 'slug',
+                    'terms'    => sanitize_text_field( $atts['category'] ),
+                ),
+            );
+        }
+
+        $courses = get_posts( $query_args );
+
+        // Build category list for filter sidebar (only cats that have courses)
+        $show_filter = ( strtolower( $atts['show_filter'] ) !== 'no' );
+        $filter_cats = array();
+        if ( $show_filter ) {
+            $all_cats = get_terms( array(
+                'taxonomy'   => $filter_tax,
+                'hide_empty' => true,
+                'object_ids' => wp_list_pluck( $courses, 'ID' ),
+                'orderby'    => 'name',
+                'order'      => 'ASC',
+            ) );
+            if ( ! is_wp_error( $all_cats ) ) $filter_cats = $all_cats;
+        }
+
+        // Map course ID → its term slugs for JS filtering
+        $course_cats = array(); // [ post_id => [slug, slug, ...] ]
+        if ( $show_filter && ! empty( $filter_cats ) ) {
+            foreach ( $courses as $c ) {
+                $terms = wp_get_post_terms( $c->ID, $filter_tax, array( 'fields' => 'slugs' ) );
+                $course_cats[ $c->ID ] = is_array( $terms ) ? $terms : array();
+            }
+        }
+
+        $uid = 'escl_' . substr( md5( serialize( $atts ) ), 0, 8 ); // unique id per shortcode instance
+
+        ob_start();
+        ?>
+        <div class="es-course-listing-wrap" id="<?php echo esc_attr( $uid ); ?>">
+
+        <?php if ( $show_filter && ! empty( $filter_cats ) ) : ?>
+            <aside class="es-cl-sidebar">
+                <div class="es-cl-filter-head">Filter</div>
+                <ul class="es-cl-cat-list">
+                    <li>
+                        <label class="es-cl-cat-item is-active" data-slug="">
+                            <input type="radio" name="<?php echo esc_attr( $uid ); ?>_cat" value="" checked /> All Courses
+                        </label>
+                    </li>
+                    <?php foreach ( $filter_cats as $term ) : ?>
+                    <li>
+                        <label class="es-cl-cat-item" data-slug="<?php echo esc_attr( $term->slug ); ?>">
+                            <input type="radio" name="<?php echo esc_attr( $uid ); ?>_cat" value="<?php echo esc_attr( $term->slug ); ?>" />
+                            <?php echo esc_html( $term->name ); ?>
+                            <span class="es-cl-cat-count"><?php echo (int) $term->count; ?></span>
+                        </label>
+                    </li>
+                    <?php endforeach; ?>
+                </ul>
+            </aside>
+        <?php endif; ?>
+
+        <div class="es-course-listing">
+            <?php if ( empty( $courses ) ) : ?>
+                <p style="text-align:center;color:#94a3b8;padding:40px 0;">No courses found.</p>
+            <?php else : foreach ( $courses as $course ) :
+                $cid         = (int) $course->ID;
+                $title       = get_the_title( $course );
+                $permalink   = ! empty( $atts['demo_url'] ) ? esc_url( $atts['demo_url'] ) : get_permalink( $course );
+                $thumb_url   = get_the_post_thumbnail_url( $course, 'medium' );
+
+                // ACF fields — safe fallbacks if ACF not active
+                $short_desc  = function_exists( 'get_field' ) ? get_field( 'course_short_description', $cid ) : '';
+                $rating      = function_exists( 'get_field' ) ? (float) get_field( 'rating', $cid ) : 0;
+                $creator     = function_exists( 'get_field' ) ? get_field( 'course_created_by', $cid ) : '';
+                if ( ! $short_desc ) $short_desc = wp_trim_words( get_the_excerpt( $course ) ?: strip_tags( $course->post_content ), 18, '…' );
+                if ( ! $creator )    $creator    = get_the_author_meta( 'display_name', (int) $course->post_author );
+
+                // Badges: try custom taxonomy 'course_badge', fallback to 'category'
+                $badge_terms = array();
+                if ( taxonomy_exists( 'course_badge' ) ) {
+                    $badge_terms = wp_get_post_terms( $cid, 'course_badge', array( 'fields' => 'names' ) );
+                }
+                if ( empty( $badge_terms ) ) {
+                    $cat_terms = wp_get_post_terms( $cid, 'category', array( 'fields' => 'names' ) );
+                    $badge_terms = is_array( $cat_terms ) ? $cat_terms : array();
+                }
+                $badge_terms = is_wp_error( $badge_terms ) ? array() : $badge_terms;
+
+                // Rating stars: filled / half / empty
+                $rating_clamped = min( 5, max( 0, $rating ) );
+                $stars_html = '';
+                for ( $s = 1; $s <= 5; $s++ ) {
+                    $diff = $rating_clamped - ( $s - 1 );
+                    if ( $diff >= 1 )        $stars_html .= '<span class="es-cl-star es-cl-star-full">★</span>';
+                    elseif ( $diff >= 0.4 )  $stars_html .= '<span class="es-cl-star es-cl-star-half">★</span>';
+                    else                     $stars_html .= '<span class="es-cl-star es-cl-star-empty">★</span>';
+                }
+
+                // Data attribute for JS category filter
+                $cat_slugs_attr = ! empty( $course_cats[ $cid ] ) ? implode( ' ', $course_cats[ $cid ] ) : '';
+            ?>
+                <div class="es-cl-row" data-cats="<?php echo esc_attr( $cat_slugs_attr ); ?>">
+                    <!-- Thumbnail -->
+                    <div class="es-cl-thumb">
+                        <?php if ( $thumb_url ) : ?>
+                            <a href="<?php echo esc_url( $permalink ); ?>">
+                                <img src="<?php echo esc_url( $thumb_url ); ?>" alt="<?php echo esc_attr( $title ); ?>" loading="lazy" />
+                            </a>
+                        <?php else : ?>
+                            <div class="es-cl-thumb-placeholder"><span class="dashicons dashicons-welcome-learn-more"></span></div>
+                        <?php endif; ?>
+                    </div>
+
+                    <!-- Info -->
+                    <div class="es-cl-info">
+                        <h3 class="es-cl-title"><a href="<?php echo esc_url( $permalink ); ?>"><?php echo esc_html( $title ); ?></a></h3>
+                        <?php if ( $short_desc ) : ?>
+                            <p class="es-cl-desc"><?php echo esc_html( $short_desc ); ?></p>
+                        <?php endif; ?>
+
+                        <?php if ( ! empty( $badge_terms ) ) : ?>
+                            <div class="es-cl-badges">
+                                <?php foreach ( $badge_terms as $badge ) :
+                                    $cls  = 'es-cl-badge';
+                                    if ( stripos( $badge, 'premium' ) !== false )      $cls .= ' es-cl-badge-premium';
+                                    elseif ( stripos( $badge, 'bestsell' ) !== false ) $cls .= ' es-cl-badge-bestseller';
+                                    elseif ( stripos( $badge, 'new' ) !== false )      $cls .= ' es-cl-badge-new';
+                                ?>
+                                    <span class="<?php echo esc_attr( $cls ); ?>"><?php echo esc_html( $badge ); ?></span>
+                                <?php endforeach; ?>
+                            </div>
+                        <?php endif; ?>
+
+                        <?php if ( $creator ) : ?>
+                            <div class="es-cl-creator"><?php echo esc_html( $creator ); ?></div>
+                        <?php endif; ?>
+
+                        <?php if ( $rating_clamped > 0 ) : ?>
+                            <div class="es-cl-rating">
+                                <span class="es-cl-rating-num"><?php echo number_format( $rating_clamped, 1 ); ?></span>
+                                <span class="es-cl-stars"><?php echo $stars_html; ?></span>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+
+                    <!-- Demo button -->
+                    <div class="es-cl-action">
+                        <a href="<?php echo esc_url( $permalink ); ?>" class="es-cl-demo-btn"><?php echo esc_html( $atts['demo_label'] ); ?></a>
+                    </div>
+                </div>
+            <?php endforeach; endif; ?>
+        </div><!-- /.es-course-listing -->
+        </div><!-- /.es-course-listing-wrap -->
+
+        <style>
+        #<?php echo esc_attr( $uid ); ?>.es-course-listing-wrap{display:flex;align-items:flex-start;gap:28px;max-width:960px;margin:0 auto;font-family:inherit;}
+        .es-cl-sidebar{flex:0 0 180px;width:180px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;padding:14px 0;position:sticky;top:80px;}
+        .es-cl-filter-head{font-size:11px;text-transform:uppercase;letter-spacing:.08em;font-weight:700;color:#64748b;padding:0 14px 10px;border-bottom:1px solid #e5e7eb;margin-bottom:6px;}
+        .es-cl-cat-list{list-style:none;margin:0;padding:0;}
+        .es-cl-cat-item{display:flex;align-items:center;gap:8px;padding:7px 14px;font-size:13px;cursor:pointer;color:#374151;transition:background .12s;border-radius:6px;margin:0 4px;}
+        .es-cl-cat-item:hover{background:#f1f5f9;}
+        .es-cl-cat-item.is-active{background:#ede9fe;color:#6d28d9;font-weight:600;}
+        .es-cl-cat-item input[type="radio"]{display:none;}
+        .es-cl-cat-count{margin-left:auto;font-size:11px;background:#e5e7eb;color:#6b7280;border-radius:999px;padding:1px 7px;font-weight:600;}
+        .es-cl-cat-item.is-active .es-cl-cat-count{background:#ddd6fe;color:#6d28d9;}
+        .es-course-listing{flex:1;min-width:0;}
+        .es-cl-row{display:flex;align-items:flex-start;gap:18px;padding:20px 0;border-bottom:1px solid rgba(0,0,0,.07);}
+        .es-cl-row:last-child{border-bottom:none;}
+        .es-cl-thumb{flex:0 0 200px;width:200px;}
+        .es-cl-thumb img{width:100%;height:130px;object-fit:cover;border-radius:8px;display:block;}
+        .es-cl-thumb-placeholder{width:100%;height:130px;background:#1e293b;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#475569;font-size:32px;}
+        .es-cl-info{flex:1;min-width:0;}
+        .es-cl-title{margin:0 0 6px;font-size:16px;font-weight:700;line-height:1.3;}
+        .es-cl-title a{text-decoration:none;color:inherit;}
+        .es-cl-title a:hover{text-decoration:underline;}
+        .es-cl-desc{margin:0 0 8px;font-size:13px;line-height:1.5;color:#94a3b8;}
+        .es-cl-badges{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;}
+        .es-cl-badge{display:inline-block;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:700;letter-spacing:.02em;background:#334155;color:#94a3b8;}
+        .es-cl-badge-premium{background:#7c3aed;color:#fff;}
+        .es-cl-badge-bestseller{background:#d97706;color:#fff;}
+        .es-cl-badge-new{background:#059669;color:#fff;}
+        .es-cl-creator{font-size:12px;color:#64748b;margin-bottom:6px;}
+        .es-cl-rating{display:flex;align-items:center;gap:6px;}
+        .es-cl-rating-num{font-size:13px;font-weight:700;color:#f59e0b;}
+        .es-cl-stars{display:flex;gap:1px;}
+        .es-cl-star{font-size:14px;color:#f59e0b;}
+        .es-cl-star-empty{color:#475569;}
+        .es-cl-star-half{position:relative;color:#475569;}
+        .es-cl-star-half::before{content:"★";position:absolute;left:0;top:0;width:50%;overflow:hidden;color:#f59e0b;}
+        .es-cl-action{flex:0 0 auto;display:flex;align-items:flex-start;padding-top:4px;}
+        .es-cl-demo-btn{display:inline-block;padding:7px 18px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;font-weight:600;color:inherit;text-decoration:none;transition:border-color .15s,color .15s;}
+        .es-cl-demo-btn:hover{border-color:#8b5cf6;color:#8b5cf6;}
+        @media(max-width:700px){
+            #<?php echo esc_attr( $uid ); ?>.es-course-listing-wrap{flex-direction:column;}
+            .es-cl-sidebar{flex:none;width:100%;position:static;}
+            .es-cl-cat-list{display:flex;flex-wrap:wrap;gap:4px;padding:0 10px;}
+            .es-cl-cat-item{padding:5px 10px;}
+            .es-cl-row{flex-wrap:wrap;}
+            .es-cl-thumb{flex:0 0 100%;width:100%;}
+            .es-cl-thumb img{height:180px;}
+            .es-cl-action{width:100%;}
+            .es-cl-demo-btn{width:100%;text-align:center;}
+        }
+        </style>
+        <script>
+        (function(){
+            var wrap = document.getElementById('<?php echo esc_js( $uid ); ?>');
+            if (!wrap) return;
+            wrap.addEventListener('click', function(e) {
+                var label = e.target.closest('.es-cl-cat-item');
+                if (!label) return;
+                var slug = label.dataset.slug || '';
+                // Update active state
+                wrap.querySelectorAll('.es-cl-cat-item').forEach(function(l){ l.classList.remove('is-active'); });
+                label.classList.add('is-active');
+                // Filter rows
+                wrap.querySelectorAll('.es-cl-row').forEach(function(row){
+                    if (!slug) { row.style.display = ''; return; }
+                    var cats = (row.dataset.cats || '').split(' ');
+                    row.style.display = cats.indexOf(slug) !== -1 ? '' : 'none';
+                });
+            });
+        })();
+        </script>
+        <?php
+        wp_reset_postdata();
         return ob_get_clean();
     }
 

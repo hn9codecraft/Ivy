@@ -27,10 +27,10 @@ if ( ! function_exists( 'es_user_sessions_left' ) ) {
     <div class="es-page-head">
         <div>
             <h1><?php echo $detail_mode ? esc_html( $selected->display_name . ' Details' ) : '1:1 Students'; ?></h1>
-            <p class="es-page-sub"><?php echo $detail_mode ? esc_html( $selected->user_email ) : 'Converted 1-on-1 students &mdash; ' . count( $users ) . ' total'; ?></p>
+            <p class="es-page-sub"><?php echo $detail_mode ? esc_html( $selected->user_email ) : 'Converted 1-on-1 students — ' . count( $users ) . ' total'; ?></p>
         </div>
         <?php if ( $detail_mode ) : ?>
-            <div class="es-page-actions"><a class="es-btn es-btn-ghost" href="<?php echo esc_url( $base ); ?>">&larr; Back to 1:1 Students</a></div>
+            <div class="es-page-actions"><a class="es-btn es-btn-ghost" href="<?php echo esc_url( $base ); ?>">← Back to 1:1 Students</a></div>
         <?php endif; ?>
     </div>
 
@@ -148,8 +148,34 @@ if ( ! function_exists( 'es_user_sessions_left' ) ) {
 
                 $total = $plan ? (int) ( $plan->total_sessions ?? 0 ) : ( $pkg ? (int) ( $pkg->total_sessions ?? 0 ) : 0 );
                 $used  = $plan ? (int) ( $plan->used_sessions ?? 0 ) : 0;
-                $left  = max( 0, $total - $used );
-                $pct   = $total > 0 ? round( ( $used / $total ) * 100 ) : 0;
+
+                // Under the attendance-time model, used_sessions only counts
+                // sessions with attendance marked (Present/Absent-without-permission).
+                // To prevent over-scheduling, we also count confirmed-but-unattended
+                // bookings as "pending" sessions that still consume capacity.
+                $pending = 0;
+                if ( $plan ) {
+                    global $wpdb;
+                    $b_tbl = $wpdb->prefix . 'es_bookings';
+                    $s_tbl = $wpdb->prefix . 'es_slots';
+                    $a_tbl = $wpdb->prefix . 'es_attendance';
+                    $pending = (int) $wpdb->get_var( $wpdb->prepare(
+                        "SELECT COUNT(DISTINCT bk.slot_id)
+                           FROM {$b_tbl} bk
+                           INNER JOIN {$s_tbl} sl ON sl.id = bk.slot_id
+                           LEFT JOIN  {$a_tbl} at ON at.slot_id  = bk.slot_id
+                                                  AND at.user_id  = bk.user_id
+                                                  AND (at.group_id IS NULL OR at.group_id = 0)
+                          WHERE bk.user_id = %d
+                            AND bk.status  = 'confirmed'
+                            AND sl.slot_type = '1to1'
+                            AND (at.id IS NULL OR at.status NOT IN ('present','absent_unexcused','absent_excused'))",
+                        (int) $selected->ID
+                    ) );
+                }
+                $effective_used = $used + $pending;
+                $left  = max( 0, $total - $effective_used );
+                $pct   = $total > 0 ? round( ( $effective_used / $total ) * 100 ) : 0;
                 $dur   = $plan ? (int) ( $plan->months ?? 1 ) : ( $pkg ? (int) ( $pkg->months ?? 1 ) : 0 );
 
                 $sched_blocked = false;
@@ -234,19 +260,6 @@ if ( ! function_exists( 'es_user_sessions_left' ) ) {
                         <?php else : ?>
                             <button type="button" class="es-btn es-btn-ghost es-open-schedule-modal">+ Schedule</button>
                         <?php endif; ?>
-                        <?php if ( $join_url ) : ?>
-                            <a href="<?php echo esc_url( $join_url ); ?>" target="_blank" rel="noopener" class="es-btn es-btn-primary">Join Meet</a>
-                        <?php else : ?>
-                            <button type="button" class="es-btn es-btn-primary" disabled title="No upcoming meeting link">Join Meet</button>
-                        <?php endif; ?>
-                        <?php if ( ! empty( $all_groups ) ) : ?>
-                            <button type="button" class="es-btn es-btn-ghost es-open-join-group-modal"
-                                data-user-id="<?php echo (int) $selected->ID; ?>"
-                                data-user-name="<?php echo esc_attr( $selected->display_name ); ?>"
-                                title="Add this 1:1 student to a group (read-only — does not change 1:1 data)">
-                                👥 Join Group
-                            </button>
-                        <?php endif; ?>
                     </div>
 
                     <!-- Tab bar -->
@@ -254,7 +267,7 @@ if ( ! function_exists( 'es_user_sessions_left' ) ) {
                         <button type="button" class="es-tab is-active" data-tab="pkg">Package</button>
                         <button type="button" class="es-tab" data-tab="att">Attendance</button>
                         <button type="button" class="es-tab" data-tab="schedule">Schedule</button>
-                        <button type="button" class="es-tab" data-tab="renew">Purchase</button>
+                        <button type="button" class="es-tab" data-tab="renew">Purchase Package</button>
                     </div>
 
                     <div class="es-tab-body">
@@ -263,9 +276,9 @@ if ( ! function_exists( 'es_user_sessions_left' ) ) {
                         <div class="es-tabpane" data-pane="att" style="display:none;">
                             <div class="es-section-label">Session Attendance</div>
                             <p class="es-att-legend" style="font-size:12px;opacity:.7;margin:0 0 12px;">
-                                Scheduling a session uses one session. &nbsp;·&nbsp;
-                                <strong>Present</strong> = stays used &nbsp;·&nbsp;
-                                <strong>Absent - without permission</strong> = stays used &nbsp;·&nbsp;
+                                Scheduling a session uses one session.  · 
+                                <strong>Present</strong> = stays used  · 
+                                <strong>Absent - without permission</strong> = stays used  · 
                                 <strong>Absent - with permission</strong> = session refunded
                             </p>
                             <?php if ( ! empty( $att_packages ) ) : ?>
@@ -339,7 +352,7 @@ if ( ! function_exists( 'es_user_sessions_left' ) ) {
                                 <div class="es-alert es-alert-warning" style="margin-bottom:14px;padding:10px 12px;background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;color:#92400e;font-size:13px;line-height:1.5;">
                                     <strong>Scheduling disabled.</strong> <?php echo esc_html( $sched_reason ); ?>
                                     <?php if ( ! $plan || $left <= 0 || ( ! empty( $plan->valid_until ) && strtotime( $plan->valid_until ) < current_time( 'timestamp' ) ) ) : ?>
-                                        &nbsp;<a href="#" class="es-tab-link" data-goto="renew" style="color:#92400e;font-weight:600;text-decoration:underline;">Go to Renew tab →</a>
+                                         <a href="#" class="es-tab-link" data-goto="renew" style="color:#92400e;font-weight:600;text-decoration:underline;">Go to Renew tab →</a>
                                     <?php endif; ?>
                                 </div>
                             <?php endif; ?>
@@ -353,8 +366,11 @@ if ( ! function_exists( 'es_user_sessions_left' ) ) {
                                             $payPkg = ES_Packages::get( (int) $payRow->package_id );
                                             $p_total = (int) ( $payRow->total_sessions ?? 0 );
                                             $p_used  = (int) ( $payRow->used_sessions ?? 0 );
-                                            $p_left  = max( 0, $p_total - $p_used );
-                                            $p_pct   = $p_total > 0 ? round( ( $p_used / $p_total ) * 100 ) : 0;
+                                            $is_active_plan = $plan && (int) $plan->id === (int) $payRow->id;
+                                            // For the active plan, subtract pending (scheduled but unattended) sessions
+                                            $p_pending = $is_active_plan ? max( 0, (int) $pending ) : 0;
+                                            $p_left  = max( 0, $p_total - $p_used - $p_pending );
+                                            $p_pct   = $p_total > 0 ? round( ( ( $p_used + $p_pending ) / $p_total ) * 100 ) : 0;
                                             $is_expired = ! empty( $payRow->valid_until ) && strtotime( $payRow->valid_until ) < $now_ts;
                                             $is_empty   = ( $p_total > 0 && $p_left <= 0 );
                                             if ( $is_expired )      { $st_cls = 'es-pill-danger';  $st_txt = 'EXPIRED'; }
@@ -370,7 +386,7 @@ if ( ! function_exists( 'es_user_sessions_left' ) ) {
                                                         <?php if ( $is_active_plan ) : ?><span class="es-pill es-pill-info" style="margin-left:6px;font-size:10px;">CURRENT</span><?php endif; ?>
                                                     </span>
                                                     <span class="es-pkgacc-sub">
-                                                        <?php echo (int) $p_used; ?> / <?php echo (int) $p_total; ?> used · <?php echo (int) $p_left; ?> left<?php if ( ! empty( $payRow->course_name ) ) : ?> · <?php echo esc_html( $payRow->course_name ); ?><?php endif; ?>
+                                                        <?php echo (int) $p_used; ?> attended<?php if ( $p_pending > 0 ) : ?> · <?php echo (int) $p_pending; ?> scheduled<?php endif; ?> · <?php echo (int) $p_left; ?> left of <?php echo (int) $p_total; ?><?php if ( ! empty( $payRow->course_name ) ) : ?> · <?php echo esc_html( $payRow->course_name ); ?><?php endif; ?>
                                                     </span>
                                                     <span class="es-pill <?php echo esc_attr( $st_cls ); ?>"><?php echo esc_html( $st_txt ); ?></span>
                                                 </button>
@@ -384,12 +400,16 @@ if ( ! function_exists( 'es_user_sessions_left' ) ) {
                                                         <?php if ( $p_dur > 0 ) : ?><div><span>Duration</span><strong><?php echo (int) $p_dur; ?> month<?php echo $p_dur > 1 ? 's' : ''; ?></strong></div><?php endif; ?>
                                                         <div><span>Monthly Sessions</span><strong><?php echo (int) ( $payRow->monthly_session_limit ?? 0 ); ?></strong></div>
                                                         <div><span>Total Sessions</span><strong><?php echo (int) $p_total; ?></strong></div>
-                                                        <div><span>Used Sessions</span><strong><?php echo (int) $p_used; ?></strong></div>
+                                                        <div><span>Attended (Used)</span><strong><?php echo (int) $p_used; ?></strong></div>
+                                                        <?php if ( $p_pending > 0 ) : ?><div><span>Scheduled (Pending)</span><strong><?php echo (int) $p_pending; ?></strong></div><?php endif; ?>
                                                         <div><span>Remaining</span><strong><?php echo (int) $p_left; ?></strong></div>
                                                         <?php if ( ! empty( $payRow->valid_until ) ) : ?><div><span>Valid Until</span><strong><?php echo esc_html( date_i18n( 'M j, Y', strtotime( $payRow->valid_until ) ) ); ?></strong></div><?php endif; ?>
                                                         <?php if ( ! empty( $payRow->amount ) ) : ?><div><span>Paid</span><strong><?php echo esc_html( ES_Helpers::format_price( $payRow->amount, ! empty( $payRow->currency ) ? $payRow->currency : 'INR' ) ); ?></strong></div><?php endif; ?>
                                                     </div>
                                                     <div class="es-usage-bar" style="margin-top:10px;"><div class="es-usage-bar-fill" style="width:<?php echo (int) $p_pct; ?><?php echo '%'; ?>;"></div></div>
+                                                    <?php if ( $payPkg && ! empty( $payPkg->description ) ) : ?>
+                                                        <div class="es-package-desc"><?php echo nl2br( esc_html( $payPkg->description ) ); ?></div>
+                                                    <?php endif; ?>
                                                 </div>
                                             </div>
                                         <?php endforeach; ?>
@@ -507,7 +527,7 @@ if ( ! function_exists( 'es_user_sessions_left' ) ) {
                                         <span class="es-schedpkg-name"><?php echo esc_html( $sgrp['pkg_name'] ); ?></span>
                                         <span class="es-schedpkg-sub"><?php echo count( $sgrp['rows'] ); ?> session<?php echo count( $sgrp['rows'] ) !== 1 ? 's' : ''; ?></span>
                                         <?php if ( $sg_total > 0 ) : ?>
-                                            <span class="es-pill es-pill-info" style="font-size:11px;"><?php echo (int) $sg_used; ?> used &middot; <?php echo (int) $sg_left; ?> left</span>
+                                            <span class="es-pill es-pill-info" style="font-size:11px;"><?php echo (int) $sg_used; ?> used · <?php echo (int) $sg_left; ?> left</span>
                                         <?php endif; ?>
                                     </button>
                                     <div class="es-schedpkg-body">
@@ -638,10 +658,10 @@ if ( ! function_exists( 'es_user_sessions_left' ) ) {
 
                         <!-- ===================== RENEW TAB ===================== -->
                         <div class="es-tabpane" data-pane="renew" style="display:none;">
-                            <div class="es-section-label" style="margin-bottom:10px;">Renew / Extend Package</div>
+                            <div class="es-section-label" style="margin-bottom:10px;">Purchase Package</div>
                             <p style="font-size:13px;color:var(--es-text-muted);margin:0 0 16px;line-height:1.5;">
                                 Use this tab when the student has completed their current package and needs a new one, or when their plan has expired.
-                                Renew works like After Call: it creates a package-selection link and sends it by email. The package becomes active only after the student completes selection/payment.
+                                This creates a package-selection link and sends it by email. The package becomes active only after the student completes selection/payment.
                             </p>
 
                             <div class="es-aftercall-linkbox" style="margin-bottom:16px;">
@@ -660,22 +680,39 @@ if ( ! function_exists( 'es_user_sessions_left' ) ) {
 
                             <div class="es-card" style="padding:20px;">
                                 <div id="es-renew-form">
+                                    <?php
+                                    // All active packages for JS-based filtering by type
+                                    $all_renew_packages = ES_Packages::get_all( true );
+                                    ?>
                                     <div class="es-field" style="margin-bottom:14px;">
-                                        <label class="es-label">Select Package to Renew With</label>
+                                        <label class="es-label">Package Type</label>
+                                        <select id="es-renew-type" style="width:100%;padding:9px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:14px;">
+                                            <option value="">— All Types —</option>
+                                            <option value="1to1">1:1</option>
+                                            <option value="group">Group</option>
+                                            <option value="consultancy">Consultancy</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="es-field" style="margin-bottom:14px;">
+                                        <label class="es-label">Select Package</label>
                                         <select id="es-renew-package" style="width:100%;padding:9px 12px;border:1px solid #e5e7eb;border-radius:8px;font-size:14px;">
                                             <option value="">— Select a package —</option>
-                                            <?php foreach ( $renew_packages as $ap ) : ?>
+                                            <?php foreach ( $all_renew_packages as $ap ) :
+                                                $ap_type = ! empty( $ap->package_type ) ? $ap->package_type : '1to1';
+                                            ?>
                                                 <option value="<?php echo (int) $ap->id; ?>"
                                                     data-sessions="<?php echo (int) ( $ap->total_sessions ?? 0 ); ?>"
                                                     data-months="<?php echo (int) ( $ap->months ?? 1 ); ?>"
-                                                    data-price="<?php echo esc_attr( $ap->price ?? 0 ); ?>">
+                                                    data-price="<?php echo esc_attr( $ap->price ?? 0 ); ?>"
+                                                    data-type="<?php echo esc_attr( $ap_type ); ?>">
                                                     <?php echo esc_html( $ap->package_name ); ?>
                                                     (<?php echo (int) ( $ap->total_sessions ?? 0 ); ?> sessions · <?php echo (int) ( $ap->months ?? 1 ); ?> months)
                                                 </option>
                                             <?php endforeach; ?>
                                         </select>
-                                        <?php if ( empty( $renew_packages ) ) : ?>
-                                            <small class="es-helper" style="display:block;margin-top:6px;color:#b45309;">No renewable package is available right now. The currently active, non-expired package is hidden until it expires or its sessions are completed.</small>
+                                        <?php if ( empty( $all_renew_packages ) ) : ?>
+                                            <small class="es-helper" style="display:block;margin-top:6px;color:#b45309;">No packages available. Add packages from the Packages page first.</small>
                                         <?php endif; ?>
                                     </div>
 
@@ -713,7 +750,7 @@ if ( ! function_exists( 'es_user_sessions_left' ) ) {
                                     <div style="display:flex;justify-content:flex-end;">
                                         <button type="button" class="es-btn es-btn-primary" id="es-renew-submit" data-user-id="<?php echo (int) $selected->ID; ?>" <?php disabled( empty( $renew_packages ) ); ?>>
                                             <span class="dashicons dashicons-update" style="font-size:16px;width:16px;height:16px;vertical-align:text-bottom;margin-right:4px;"></span>
-                                            Renew Package
+                                            Purchase Package
                                         </button>
                                     </div>
                                 </div>
@@ -1009,12 +1046,12 @@ jQuery(function($){
 
     /* ── Schedule modal open/close ── */
     $(document).on('click', '.es-open-schedule-modal', function(){
-        $('#es-schedule-modal').addClass('is-open').attr('aria-hidden','false');
+        $('#es-schedule-modal').css('display','').addClass('is-open').attr('aria-hidden','false');
         $('body').addClass('es-modal-open');
         setTimeout(function(){ $('#es-ss-date').trigger('focus'); }, 80);
     });
     $(document).on('click', '.es-schedule-modal-close, .es-schedule-modal-overlay', function(){
-        $(this).closest('.es-schedule-modal').removeClass('is-open').attr('aria-hidden','true').hide();
+        $(this).closest('.es-schedule-modal').removeClass('is-open').attr('aria-hidden','true').css('display','none');
         $('body').removeClass('es-modal-open');
     });
 
@@ -1265,6 +1302,22 @@ jQuery(function($){
     if ($.fn.select2 && $('#es-renew-course').length) {
         $('#es-renew-course').select2({ placeholder: 'Search course…', width: '100%', allowClear: true });
     }
+
+    /* ── Purchase Package tab: filter package dropdown by type ── */
+    $(document).on('change', '#es-renew-type', function(){
+        var selectedType = $(this).val();
+        $('#es-renew-package option').each(function(){
+            var $opt = $(this);
+            if (!$opt.val()) { $opt.show(); return; } // keep placeholder
+            if (!selectedType || $opt.data('type') === selectedType) {
+                $opt.show();
+            } else {
+                $opt.hide();
+            }
+        });
+        // Reset selection when filter changes
+        $('#es-renew-package').val('').trigger('change');
+    });
 
     $(document).on('click', '#es-renew-submit', function(){
         var pkgId = $('#es-renew-package').val();

@@ -742,6 +742,7 @@ class ES_Admin_Ajax {
             'tagline'               => isset( $_POST['tagline'] ) ? sanitize_text_field( wp_unslash( $_POST['tagline'] ) ) : '',
             'description'           => isset( $_POST['description'] ) ? sanitize_textarea_field( wp_unslash( $_POST['description'] ) ) : '',
             'display_order'         => isset( $_POST['display_order'] ) ? (int) $_POST['display_order'] : 0,
+            'package_type'          => isset( $_POST['package_type'] ) && in_array( $_POST['package_type'], array( '1to1', 'group', 'consultancy' ), true ) ? sanitize_text_field( wp_unslash( $_POST['package_type'] ) ) : '1to1',
             'is_active'             => $is_active,
         );
         // price (total) and total_sessions are auto-computed by ES_Packages
@@ -1028,7 +1029,7 @@ class ES_Admin_Ajax {
         $sel_months       = max( 1, (int) ( $package->months ?? 1 ) );
         $monthly_sessions = max( 0, (int) ( $package->monthly_session_limit ?? 0 ) );
         $total_sessions   = (int) ( $package->total_sessions ?? 0 );
-        if ( $total_sessions <= 0 && $monthly_sessions > 0 ) $total_sessions = $monthly_sessions * $sel_months;
+        if ( $total_sessions <= 0 && $monthly_sessions > 0 ) $total_sessions = $monthly_sessions * ( $sel_months + 1 );
 
         $valid_from_ts = current_time( 'timestamp' );
         $valid_from    = date( 'Y-m-d H:i:s', $valid_from_ts );
@@ -1717,7 +1718,8 @@ class ES_Admin_Ajax {
                 if ( ! $chosen_payment ) {
                     wp_send_json_error( array( 'message' => 'The selected package is not valid for this student.' ) );
                 }
-                $left = max( 0, (int) $chosen_payment->total_sessions - (int) $chosen_payment->used_sessions );
+                // Include pending (scheduled-not-attended) so we can't over-schedule (Point 4)
+                $left = ES_Packages::remaining_sessions( $chosen_payment, (int) $user_ids[0] );
                 if ( $left <= 0 ) {
                     wp_send_json_error( array( 'message' => 'No sessions left on the selected package. Pick a different package or renew it first.' ) );
                 }
@@ -1729,7 +1731,9 @@ class ES_Admin_Ajax {
                 if ( ! $plan ) {
                     wp_send_json_error( array( 'message' => 'This student has no active package. Convert or renew them via After Call before scheduling.' ) );
                 }
-                $left = ES_Packages::remaining_sessions( $plan );
+                // Include pending (scheduled-not-attended) in the check so we
+                // cannot over-schedule beyond the package capacity (Point 4 fix).
+                $left = ES_Packages::remaining_sessions( $plan, (int) $user_ids[0] );
                 if ( $left <= 0 ) {
                     wp_send_json_error( array( 'message' => 'No sessions left on the active package. Renew before scheduling more.' ) );
                 }
@@ -1917,7 +1921,10 @@ class ES_Admin_Ajax {
                 $created[] = $bid;
                 if ( $send_email ) {
                     $sched_note = isset( $_POST['notes'] ) ? sanitize_textarea_field( wp_unslash( $_POST['notes'] ) ) : '';
+                    // Send to student
                     ES_Mailer::send_booking_confirmation( $bid, $sched_note );
+                    // Always send admin notification on admin-scheduled sessions
+                    ES_Mailer::send_admin_booking_notification( $bid, $sched_note );
                 }
             } else {
                 if ( ! empty( $bdata['zoom_meeting_id'] ) ) @ES_Zoom::delete_meeting( $bdata['zoom_meeting_id'] );
@@ -1936,10 +1943,12 @@ class ES_Admin_Ajax {
                 ES_Packages::recount_used_sessions( (int) $uid );
             }
             $fresh = ES_Packages::get_active_plan( (int) $user_ids[0] );
+            // Include pending (scheduled-not-attended) in sessions_left so the
+            // UI counter matches the template's $effective_used (Point 4 fix).
             $counts = array(
                 'sessions_total' => $fresh ? (int) ( $fresh->total_sessions ?? 0 ) : 0,
                 'sessions_used'  => $fresh ? (int) ( $fresh->used_sessions ?? 0 ) : 0,
-                'sessions_left'  => $fresh ? ES_Packages::remaining_sessions( $fresh ) : 0,
+                'sessions_left'  => $fresh ? ES_Packages::remaining_sessions( $fresh, (int) $user_ids[0] ) : 0,
             );
         } else {
             ES_Packages::recount_group_used_sessions( $target_id );
@@ -2214,12 +2223,15 @@ class ES_Admin_Ajax {
         ES_Packages::recount_used_sessions( $user_id );
 
         // Return the student's refreshed session counts so the UI can update.
+        // Pass $user_id to remaining_sessions() so pending (scheduled-but-
+        // unattended) bookings are subtracted — keeps UI consistent with the
+        // template's $effective_used display (Point 4 fix).
         $plan = ES_Packages::get_active_plan( $user_id );
         wp_send_json_success( array(
             'message'        => 'Attendance saved',
             'sessions_total' => $plan ? (int) ( $plan->total_sessions ?? 0 ) : 0,
             'sessions_used'  => $plan ? (int) ( $plan->used_sessions ?? 0 ) : 0,
-            'sessions_left'  => $plan ? ES_Packages::remaining_sessions( $plan ) : 0,
+            'sessions_left'  => $plan ? ES_Packages::remaining_sessions( $plan, $user_id ) : 0,
         ) );
     }
 

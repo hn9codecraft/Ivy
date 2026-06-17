@@ -325,6 +325,21 @@
             $detail.find('.es-tabpane[data-pane="' + tab + '"]').show();
         }
 
+        // Restore tab from URL hash after a post-schedule reload
+        (function() {
+            var hash = window.location.hash;
+            if (hash && hash.indexOf('#es-tab-') === 0) {
+                var hashTab = hash.replace('#es-tab-', '');
+                if (hashTab) {
+                    switchTab(hashTab);
+                    // Clean hash from URL without reloading
+                    if (window.history && window.history.replaceState) {
+                        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+                    }
+                }
+            }
+        })();
+
         // ── Attendance ──
         $detail.on('click', '.es-att-btn', function () {
             var $btn  = $(this);
@@ -755,16 +770,62 @@
                 }
                 var slotId = res.data && res.data.slot_id ? parseInt(res.data.slot_id, 10) : 0;
                 var n = queuedFiles ? queuedFiles.length : 0;
+                var activeTab = $detail.find('.es-tab.is-active').data('tab') || 'schedule';
+
+                function afterScheduleUpdate() {
+                    // Update session counts in the UI via AJAX response data
+                    var d = res.data || {};
+                    if (targetType === '1to1') {
+                        var sTotal = parseInt(d.sessions_total, 10) || 0;
+                        var sUsed  = parseInt(d.sessions_used, 10) || 0;
+                        var sLeft  = parseInt(d.sessions_left, 10) || 0;
+                        // Update payment dropdown option
+                        var $opt = $('#es-ss-payment option:selected');
+                        if ($opt.length) {
+                            $opt.data('used', sUsed);
+                            $opt.data('left', sLeft);
+                            var optText = $opt.data('package-name') || '';
+                            var optCourse = $opt.data('course-name') || '';
+                            var optUntil = $opt.data('valid-until') || '';
+                            var newLabel = optText;
+                            if (optCourse) newLabel += ' · Course: ' + optCourse;
+                            newLabel += ' · ' + sLeft + ' session' + (sLeft === 1 ? '' : 's') + ' left';
+                            if (optUntil) newLabel += ' · until ' + optUntil;
+                            $opt.text(newLabel);
+                        }
+                        // Update package card counters if preview exists
+                        if (typeof updatePaymentPreview === 'function') updatePaymentPreview();
+                    }
+                    if (targetType === 'group') {
+                        var gTotal = parseInt(d.group_total, 10) || 0;
+                        var gUsed  = parseInt(d.group_used, 10) || 0;
+                        var gLeft  = parseInt(d.group_left, 10) || 0;
+                        // Update group summary badges
+                        $detail.find('.es-usage-stat-val').each(function () {
+                            var label = $(this).next('.es-usage-stat-label').text().trim().toLowerCase();
+                            if (label === 'total') $(this).text(gTotal);
+                            else if (label === 'used') $(this).text(gUsed);
+                            else if (label === 'left' || label === 'remaining') $(this).text(gLeft);
+                        });
+                    }
+
+                    $msg.css('color', '#10b981').text('✓ Session scheduled! Reloading schedule…').show();
+                    // Clear form fields
+                    $('#es-ss-title, #es-ss-notes').val('');
+                    $btn.prop('disabled', false);
+                    // Reload page to show the new session row in schedule tab
+                    var url = window.location.href.replace(/#.*/, '');
+                    setTimeout(function () {
+                        window.location.href = url + '#es-tab-' + activeTab;
+                        window.location.reload();
+                    }, 800);
+                }
+
                 if (slotId && n > 0) {
                     $msg.css('color', '#6366f1').text('Session created. Uploading ' + n + ' file' + (n === 1 ? '' : 's') + '…').show();
-                    uploadQueuedFiles(queuedFiles, slotId, targetType, targetId, function(){
-                        $msg.css('color', '#10b981').text('✓ Scheduled & files attached. Reloading…').show();
-                        setTimeout(function(){ window.location.reload(); }, 600);
-                    });
+                    uploadQueuedFiles(queuedFiles, slotId, targetType, targetId, afterScheduleUpdate);
                 } else {
-                    $msg.css('color', '#10b981').text('✓ ' + res.data.message + ' Reloading…').show();
-                    $('#es-ss-title, #es-ss-notes').val('');
-                    setTimeout(function(){ window.location.reload(); }, 700);
+                    afterScheduleUpdate();
                 }
             },
             error: function () {
@@ -952,6 +1013,16 @@
                 $c.find('.es-pp-bd-total-amount').text(totalStr);
                 // Update the duration row inside the breakdown too.
                 $c.find('.es-pp-bd-duration').text(effMonths + ' month' + (effMonths > 1 ? 's' : ''));
+                // Update sessions row on the card.
+                var perMo = parseInt($c.data('monthly-limit'), 10) || 0;
+                var totSess = parseInt($c.data('total-sessions'), 10) || 0;
+                var cardSess = (perMo > 0) ? (perMo * effMonths) : totSess;
+                if (cardSess > 0) {
+                    $c.find('.es-pp-bd-sessions').text(
+                        cardSess + ' session' + (cardSess !== 1 ? 's' : '') +
+                        (perMo > 0 ? ' (' + perMo + '/mo)' : '')
+                    );
+                }
             });
         }
 
@@ -999,11 +1070,12 @@
                 // session total is the same regardless of the discount toggle.
                 var effSessions = (monthlyLimit > 0) ? (monthlyLimit * effMonths) : totalSessions;
                 if (effSessions > 0) {
-                    $('#es-pp-summary-sessions').text(
-                        effSessions + (monthlyLimit > 0 ? (' (' + monthlyLimit + '/mo)') : '')
-                    );
+                    var sessLabel = effSessions + (monthlyLimit > 0 ? (' (' + monthlyLimit + '/mo)') : '');
+                    $('#es-pp-summary-sessions').text(sessLabel);
+                    $('#total-sessions').text(sessLabel);
                 } else {
                     $('#es-pp-summary-sessions').text('—');
+                    $('#total-sessions').text('—');
                 }
             }
 
@@ -1352,6 +1424,7 @@
         $('#es-pkg-tagline').val('');
         $('#es-pkg-description').val('');
         $('#es-pkg-order').val('0');
+        $('#es-pkg-type').val('1to1');
         // Hidden field — packages are visible to students by default
         $('#es-pkg-active').val('1');
         recalcPackageTotals();
@@ -1370,7 +1443,7 @@
         var perMonth = parseInt($('#es-pkg-monthly-sessions').val(), 10) || 0;
 
         var total       = monthly * months;
-        var totalSess   = perMonth * months;
+        var totalSess   = perMonth > 0 ? perMonth * months : 0;
         var cur         = $('#es-pkg-currency').val() || 'INR';
         var sym         = ES_CURRENCY_SYMBOLS[cur] || (cur + ' ');
 
@@ -1413,6 +1486,7 @@
                     $('#es-pkg-tagline').val(p.tagline);
                     $('#es-pkg-description').val(p.description);
                     $('#es-pkg-order').val(p.display_order);
+                    $('#es-pkg-type').val(p.package_type || '1to1');
                     // Preserve existing active state silently (default 1)
                     $('#es-pkg-active').val(p.is_active == 0 ? '0' : '1');
                     recalcPackageTotals();
@@ -1456,6 +1530,7 @@
                 tagline: $('#es-pkg-tagline').val(),
                 description: $('#es-pkg-description').val(),
                 display_order: $('#es-pkg-order').val(),
+                package_type: $('#es-pkg-type').val() || '1to1',
                 is_active: parseInt($('#es-pkg-active').val(), 10) === 0 ? 0 : 1
             },
             success: function (res) {
@@ -1494,18 +1569,39 @@
 
         if (outcome === 'Group Student') {
             $('#es-group-field').slideDown(150);
-            $('#es-group-package-note').slideDown(150);
-            $('#es-package-field').slideUp(150);
-            $('#es-course-after-call-field').slideUp(150);
+            $('#es-group-package-note').slideUp(150);
+            // Show package field with ONLY group packages
+            $('#es-package-field').slideDown(150);
+            $('#es-course-after-call-field').slideDown(150);
+            $('.es-pkg-check-row').each(function () {
+                var pkgType = $(this).data('pkg-type');
+                if (pkgType === 'group') {
+                    $(this).show();
+                } else {
+                    $(this).hide();
+                    $(this).find('.es-pkg-check').prop('checked', false);
+                }
+            });
         } else {
             $('#es-group-field').slideUp(150);
             $('#es-group-package-note').slideUp(150);
             if (outcome === '1:1 Student') {
                 $('#es-package-field').slideDown(150);
                 $('#es-course-after-call-field').slideDown(150);
+                // Filter: show only 1:1 packages, hide group/consultancy packages
+                $('.es-pkg-check-row').each(function () {
+                    var pkgType = $(this).data('pkg-type');
+                    if (pkgType === 'group') {
+                        $(this).hide();
+                        $(this).find('.es-pkg-check').prop('checked', false);
+                    } else {
+                        $(this).show();
+                    }
+                });
             } else {
                 $('#es-package-field').slideUp(150);
                 $('#es-course-after-call-field').slideUp(150);
+                $('.es-pkg-check').prop('checked', false);
             }
         }
     }
@@ -1527,14 +1623,10 @@
         // names in the After-Call email's subject and body.
         var courseId = $('#es-after-call-course').val();
         var courseIds = courseId ? [parseInt(courseId, 10)] : [];
-        if (outcome === 'Group Student') {
-            packageIds = [];
-            courseIds = [];
-        }
 
         if (!outcome) { alert('Please select an outcome'); return; }
 
-        var needsPkg = (outcome === '1:1 Student');
+        var needsPkg = (outcome === '1:1 Student' || outcome === 'Group Student');
         if (needsPkg && packageIds.length === 0) {
             alert('Please select at least one package');
             return;
@@ -1587,7 +1679,19 @@
         $('#es-group-id').val('');
         $('#es-group-name').val('');
         $('#es-group-notes').val('');
+        $('#es-group-package').val('');
+        $('#es-group-pkg-preview').hide().text('');
     }
+
+    // Show package preview when selecting a package in the group modal
+    $(document).on('change', '#es-group-package', function(){
+        var $opt = $(this).find('option:selected');
+        var $prev = $('#es-group-pkg-preview');
+        if (!$(this).val()) { $prev.hide().text(''); return; }
+        var sessions = $opt.data('sessions') || 0;
+        var months   = $opt.data('months') || 1;
+        $prev.text('📦 ' + $opt.text().replace(/^\[.*?\]\s*/, '') + ' — ' + sessions + ' sessions over ' + months + ' month' + (months > 1 ? 's' : '')).show();
+    });
 
     function loadGroupForEdit(id) {
         $.ajax({
@@ -1600,6 +1704,12 @@
                     $('#es-group-id').val(g.id);
                     $('#es-group-name').val(g.group_name);
                     $('#es-group-notes').val(g.notes || '');
+                    if (g.package_id) {
+                        $('#es-group-package').val(g.package_id).trigger('change');
+                    } else {
+                        $('#es-group-package').val('');
+                        $('#es-group-pkg-preview').hide().text('');
+                    }
                     $('#es-group-modal-title').text('Edit Group');
                     $('#es-group-save-text').text('Update Group');
                     $('#es-group-modal').fadeIn(200);
@@ -1627,7 +1737,8 @@
                 nonce: ES_ADMIN.nonce,
                 id: id,
                 group_name: name,
-                notes: $('#es-group-notes').val()
+                notes: $('#es-group-notes').val(),
+                package_id: $('#es-group-package').val() || ''
             },
             success: function (res) {
                 if (res.success) location.reload();

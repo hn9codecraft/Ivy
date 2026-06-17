@@ -62,6 +62,7 @@ class ES_Packages {
             hours INT NOT NULL DEFAULT 0,
             tagline VARCHAR(255) NULL,
             description TEXT NULL,
+            package_type VARCHAR(30) NOT NULL DEFAULT '1to1',
             is_active TINYINT(1) NOT NULL DEFAULT 1,
             display_order INT NOT NULL DEFAULT 0,
             created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -274,6 +275,8 @@ class ES_Packages {
         $add( 'es_packages', 'total_sessions',         "INT NOT NULL DEFAULT 0" );
         $add( 'es_packages', 'discount_percent',      "DECIMAL(5,2) NOT NULL DEFAULT 0" );
         $add( 'es_packages', 'discount_months',       "INT NOT NULL DEFAULT 0" );
+        // v4.7.0 — package type for filtering (1to1 / group / consultancy)
+        $add( 'es_packages', 'package_type',          "VARCHAR(30) NOT NULL DEFAULT '1to1'" );
 
         // Payments — purchase-time snapshot of package/course/session terms
         $add( 'es_payments', 'package_name',           "VARCHAR(255) NULL" );
@@ -410,10 +413,16 @@ class ES_Packages {
 
     /* =================== PACKAGES =================== */
 
-    public static function get_all( $active_only = true ) {
+    public static function get_all( $active_only = true, $package_type = '' ) {
         global $wpdb;
         $table = $wpdb->prefix . 'es_packages';
-        $where = $active_only ? 'WHERE is_active = 1' : '';
+        $conditions = array();
+        if ( $active_only ) $conditions[] = 'is_active = 1';
+        $allowed_types = array( '1to1', 'group', 'consultancy' );
+        if ( $package_type && in_array( $package_type, $allowed_types, true ) ) {
+            $conditions[] = $wpdb->prepare( 'package_type = %s', $package_type );
+        }
+        $where = $conditions ? 'WHERE ' . implode( ' AND ', $conditions ) : '';
         return $wpdb->get_results( "SELECT * FROM {$table} {$where} ORDER BY display_order ASC, id ASC" );
     }
 
@@ -1018,13 +1027,17 @@ class ES_Packages {
         $payments = self::get_user_payments( $user_id, true, '1to1' );
         if ( empty( $payments ) ) return array();
 
-        $now = current_time( 'timestamp' );
-        $out = array();
+        $now     = current_time( 'timestamp' );
+        $pending = self::pending_sessions( $user_id ); // scheduled but not yet attended
+        $out     = array();
         foreach ( $payments as $p ) {
             if ( ! empty( $p->valid_until ) && strtotime( $p->valid_until ) < $now ) continue;
             $total = (int) ( $p->total_sessions ?? 0 );
             $used  = (int) ( $p->used_sessions ?? 0 );
-            $left  = max( 0, $total - $used );
+            // Subtract pending from the first (most recent / active) payment
+            // so the UI badge matches the template's effective_used display.
+            $left  = max( 0, $total - $used - $pending );
+            $pending = max( 0, $pending - max( 0, $total - $used ) ); // carry-over
             if ( $total > 0 && $left <= 0 ) continue;   // no sessions left
             $p->remaining = $left;
             $out[] = $p;
@@ -1098,11 +1111,53 @@ class ES_Packages {
     /**
      * Remaining sessions on a payment row (never below zero).
      */
-    public static function remaining_sessions( $payment ) {
+    /**
+     * Count confirmed 1:1 bookings that have NO attendance record yet
+     * (or status = 'none'). These are "pending" sessions — scheduled but
+     * not yet attended. They consume capacity so we don't over-schedule.
+     *
+     * @param int $user_id  WP user ID.
+     * @return int
+     */
+    public static function pending_sessions( $user_id ) {
+        global $wpdb;
+        $b = $wpdb->prefix . 'es_bookings';
+        $s = $wpdb->prefix . 'es_slots';
+        $a = $wpdb->prefix . 'es_attendance';
+        return (int) $wpdb->get_var( $wpdb->prepare(
+            "SELECT COUNT(DISTINCT bk.slot_id)
+               FROM {$b} bk
+               INNER JOIN {$s} sl ON sl.id = bk.slot_id
+               LEFT  JOIN {$a} at ON at.slot_id  = bk.slot_id
+                                  AND at.user_id  = bk.user_id
+                                  AND (at.group_id IS NULL OR at.group_id = 0)
+              WHERE bk.user_id   = %d
+                AND bk.status    = 'confirmed'
+                AND sl.slot_type = '1to1'
+                AND (at.id IS NULL OR at.status NOT IN ('present','absent_unexcused','absent_excused'))",
+            (int) $user_id
+        ) );
+    }
+
+    /**
+     * Sessions remaining on a payment plan.
+     *
+     * When $user_id is supplied, scheduled-but-not-yet-attended bookings
+     * ("pending") are also subtracted so the number is consistent with the
+     * template's $effective_used display. Without $user_id the raw
+     * (total − used) value is returned (used in AJAX contexts where we
+     * already recomputed used_sessions from attendance).
+     *
+     * @param object   $payment  Payment row.
+     * @param int|null $user_id  Optional — pass to include pending offset.
+     * @return int
+     */
+    public static function remaining_sessions( $payment, $user_id = null ) {
         if ( ! $payment ) return 0;
-        $total = (int) ( $payment->total_sessions ?? 0 );
-        $used  = (int) ( $payment->used_sessions ?? 0 );
-        return max( 0, $total - $used );
+        $total   = (int) ( $payment->total_sessions ?? 0 );
+        $used    = (int) ( $payment->used_sessions ?? 0 );
+        $pending = $user_id ? self::pending_sessions( (int) $user_id ) : 0;
+        return max( 0, $total - $used - $pending );
     }
 
     /**
@@ -1575,11 +1630,9 @@ class ES_Packages {
             $result = $wpdb->insert( $t, $data );
         }
 
-        // Recompute used_sessions for the student. Under the v4.3 model a
-        // session is consumed at SCHEDULE time, so this recount derives the
-        // count from confirmed 1:1 bookings minus any excused absences — which
-        // means marking "Absent - with permission" here refunds the session,
-        // and changing it back re-consumes it. Single source of truth.
+        // Recompute used_sessions for the student. Under the v4.7 model a
+        // session is consumed only when attendance is marked Present or
+        // Absent-without-permission. No attendance = 0 used for that session.
         if ( $result !== false ) {
             self::recount_used_sessions( $user_id );
         }
@@ -1612,18 +1665,12 @@ class ES_Packages {
         $a = $wpdb->prefix . 'es_attendance';
         $p = $wpdb->prefix . 'es_payments';
 
-        // Every paid payment row for this user — we recompute used_sessions
-        // for EACH one independently so a student with multiple stacked
-        // packages (v4.4) gets its own session pool consumed correctly.
         $payments = $wpdb->get_results( $wpdb->prepare(
             "SELECT id, total_sessions FROM {$p} WHERE user_id = %d AND status = 'paid' ORDER BY created_at DESC",
             $user_id
         ) );
         if ( empty( $payments ) ) return null;
 
-        // The id of the user's currently-active plan — legacy bookings that
-        // have NULL payment_id are counted against this one (so older data
-        // keeps working after upgrade).
         $active    = self::get_active_plan( $user_id );
         $active_id = $active ? (int) $active->id : 0;
 
@@ -1631,9 +1678,6 @@ class ES_Packages {
         foreach ( $payments as $row ) {
             $pid = (int) $row->id;
 
-            // Bookings counted against THIS payment:
-            //   - any booking with bk.payment_id = $pid, OR
-            //   - if this row is the active plan, also legacy bookings (NULL).
             $cond = '( bk.payment_id = %d';
             $args = array( $pid );
             if ( $pid === $active_id ) {
@@ -1641,41 +1685,30 @@ class ES_Packages {
             }
             $cond .= ' )';
 
-            // Schedule-time consumption model (v4.3+):
-            // Every confirmed 1:1 booking uses one session immediately.
-            // "Absent – with permission" refunds it; all other statuses (or no
-            // attendance row yet) keep the session consumed.
-            // Demo sessions (slot_type = 'demo') are excluded.
-            $scheduled = (int) $wpdb->get_var( $wpdb->prepare(
+            // ATTENDANCE-TIME MODEL (v4.7):
+            // A session is consumed only when attendance is explicitly marked
+            // Present OR Absent-without-permission. Sessions with no attendance
+            // record, or marked Absent-with-permission, do NOT count as used.
+            // This means scheduling a session alone does not consume it until
+            // attendance is recorded.
+            $used = (int) $wpdb->get_var( $wpdb->prepare(
                 "SELECT COUNT(DISTINCT bk.slot_id)
                    FROM {$b} bk
                    INNER JOIN {$s} sl ON sl.id = bk.slot_id
-                  WHERE bk.user_id = %d
-                    AND bk.status  = 'confirmed'
-                    AND sl.slot_type = '1to1'
-                    AND {$cond}",
-                array_merge( array( $user_id ), $args )
-            ) );
-
-            // Subtract sessions where attendance is "absent_excused" (refunded).
-            $excused = (int) $wpdb->get_var( $wpdb->prepare(
-                "SELECT COUNT(DISTINCT bk.slot_id)
-                   FROM {$b} bk
-                   INNER JOIN {$s} sl ON sl.id = bk.slot_id
-                   INNER JOIN {$a} at ON at.slot_id = bk.slot_id
-                                     AND at.user_id  = bk.user_id
+                   INNER JOIN {$a} at ON at.slot_id  = bk.slot_id
+                                     AND at.user_id   = bk.user_id
                                      AND ( at.group_id IS NULL OR at.group_id = 0 )
-                  WHERE bk.user_id = %d
-                    AND bk.status  = 'confirmed'
+                  WHERE bk.user_id  = %d
+                    AND bk.status   = 'confirmed'
                     AND sl.slot_type = '1to1'
-                    AND at.status = 'absent_excused'
+                    AND at.status   IN ('present','absent_unexcused')
                     AND {$cond}",
                 array_merge( array( $user_id ), $args )
             ) );
 
-            $used  = max( 0, $scheduled - $excused );
             $total = (int) $row->total_sessions;
             if ( $total > 0 && $used > $total ) $used = $total;
+            $used = max( 0, $used );
 
             $wpdb->update(
                 $p,
@@ -1952,7 +1985,7 @@ class ES_Packages {
 
     public static function get_group_renewable_packages( $group_id, $active_only = false ) {
         $group_id = (int) $group_id;
-        $packages = self::get_all( $active_only );
+        $packages = self::get_all( $active_only, 'group' ); // Only group-type packages
         if ( ! $group_id || ! self::get_group( $group_id ) ) return $packages;
 
         // Hide only packages that are still active for this group payment flow.
