@@ -679,7 +679,7 @@ $yearly_discount_int = 0;
             <button type="button" class="es-pp-pay-close" id="es-pp-pay-close" aria-label="Close payment panel">×</button>
 
             <div class="es-pp-pay-brand">
-                <img src="/wp-content/themes/hello-elementor/assets/images/iv-logo.svg" alt="IVy" />
+                <img src="<?php echo get_template_directory_uri(); ?>/assets/images/iv-logo.svg" alt="IVy" />
                 <div class="es-pp-pay-brand-sub">Personalized Plan</div>
             </div>
 
