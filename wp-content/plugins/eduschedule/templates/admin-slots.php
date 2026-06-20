@@ -108,14 +108,14 @@
                     <span class="es-helper" id="es-slot-cap-helper">1 = one-on-one</span>
                 </div>
             </div>
-            <div class="es-field">
+            <!-- <div class="es-field">
                 <label class="es-label">Title (Optional)</label>
                 <input type="text" id="es-slot-title" placeholder="e.g. Morning session" />
             </div>
             <div class="es-field">
                 <label class="es-label">Notes (Optional)</label>
                 <textarea id="es-slot-notes" rows="2" placeholder="e.g. Bring your essay draft"></textarea>
-            </div>
+            </div> -->
             <p class="es-helper" style="margin-top:14px">Time zone: <strong><?php echo esc_html( ES_Helpers::work_tz()->getName() ); ?></strong></p>
         </div>
         <div class="es-modal-foot">

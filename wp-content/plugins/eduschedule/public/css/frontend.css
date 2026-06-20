@@ -760,6 +760,8 @@
 }
 .es-pcal-day {
      height: 60px;
+     aspect-ratio: 1;
+     margin:0 auto;
     padding: 10px !important;
     background:transparent !important;
     border: 1px solid transparent !important;

@@ -543,20 +543,20 @@ button.btn-remove {
 /* ── Solid Primary ── */
 .btn-primary,
 .btn-solid {
-  background-color: var(--color-primary);
-  border-color: var(--color-primary);
-  color: #ffffff;
-  box-shadow: var(--shadow-primary);
+  background-color: var(--color-primary)!important;
+  border-color: var(--color-primary)!important;
+  color: #ffffff!important;
+  box-shadow: var(--shadow-primary) !important;
   outline:none !important;
 }
 
 .btn-primary:hover,
 .btn-solid:hover {
-  background-color: var(--color-primary-hover);
-  border-color: var(--color-primary-hover);
-  box-shadow: var(--shadow-primary-lg);
-  transform: translateY(-2px);
-  color: #ffffff;
+  background-color: var(--color-primary-hover) !important;
+  border-color: var(--color-primary-hover) !important;
+  box-shadow: var(--shadow-primary-lg) !important;
+  transform: translateY(-2px) !important;
+  color: #ffffff !important;
 }
 .btn-primary:focus,
 .btn-solid:focus,button, input{
