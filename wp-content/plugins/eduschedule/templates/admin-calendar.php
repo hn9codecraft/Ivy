@@ -106,14 +106,14 @@
                 </span>
             </div>
 
-            <div class="es-field">
+            <!-- <div class="es-field">
                 <label class="es-label">Title (Optional)</label>
                 <input type="text" id="es-slot-title" placeholder="e.g. IELTS Speaking Practice" />
             </div>
             <div class="es-field">
                 <label class="es-label">Notes (Optional)</label>
                 <textarea id="es-slot-notes" rows="2" placeholder="e.g. Bring your essay draft"></textarea>
-            </div>
+            </div> -->
 
             <label class="es-checkbox-row" id="es-slot-send-email-row">
                 <input type="checkbox" id="es-slot-send-email" checked />

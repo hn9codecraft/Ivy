@@ -35,7 +35,7 @@ $related     = get_field('related_courses');
                 </div>
 
                 <div class="info-card">
-                    <div class="premium-badge"> <img src="/wp-content/themes/hello-elementor/assets/images/ribbon-badge.svg"  alt="ribbon-badge">
+                    <div class="premium-badge"> <img src="<?php echo get_template_directory_uri(); ?>/assets/images/ribbon-badge.svg"  alt="ribbon-badge">
                                  Premium</div>
                     <div class="info-item">
                         <span>Access 28,000+ top-rated</span>
@@ -81,7 +81,7 @@ $related     = get_field('related_courses');
         <!-- COURSE CONTENT -->
         <?php if ($content): ?>
         <div class="course-card">
-            <h2>Course content</h2>
+            <h2>Course details</h2>
             <div class="accordion bg-box">
             <?php foreach ($content as $index => $section): ?>
                 <div class="accordion-section <?php echo $index === 0 ? 'active' : ''; ?>">
@@ -89,7 +89,7 @@ $related     = get_field('related_courses');
                         <div class="accordion-title">
                             <span><?php echo esc_html($section['title']); ?></span>
                         </div>
-                        <span class="accordion-icon"> <img src="/wp-content/themes/hello-elementor/assets/images/arrow-down.svg"  alt="arrow-down"></span>
+                        <span class="accordion-icon"> <img src="<?php echo get_template_directory_uri(); ?>/assets/images/arrow-down.svg"  alt="arrow-down"></span>
                     </div>
 
                     <?php if (!empty($section['lessons'])): ?>
@@ -158,12 +158,14 @@ $related     = get_field('related_courses');
                     ?>
 
                 <div class="sidebar-info">
-                    <strong>Access 28,000+ top-rated courses</strong>
+                    <strong><?php the_title(); ?></strong>
                     <span>Concept on Ivy Personal Plan.</span><br>
-                    <a href="#" class="learn-more">Learn More →</a>
                 </div>
-                <a href="<?php echo site_url('/course-quiz/?course_id=' . get_the_ID()); ?>" class="btn">
-                    Enroll Now →
+                <a href="<?php echo site_url('/course-quiz/?course_id=' . get_the_ID()); ?>" class="btn btn-primary btn-full">
+                    Book a Demo  <svg width="17" height="12" viewBox="0 0 17 12" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M10.1198 12L8.70301 10.55L12.2955 7H0V5H12.2955L8.70301 1.45L10.1198 0L16.1916 6L10.1198 12Z" fill="white"/>
+                                </svg>
+
                 </a>
             </div>
 

@@ -836,6 +836,7 @@ class ES_Admin_Ajax {
 
     public function after_call_convert() {
         $this->check();
+        global $wpdb;
 
         $user_id  = isset( $_POST['user_id'] ) ? (int) $_POST['user_id'] : 0;
         $outcome  = isset( $_POST['outcome'] ) ? sanitize_text_field( wp_unslash( $_POST['outcome'] ) ) : '';
@@ -903,7 +904,6 @@ class ES_Admin_Ajax {
         }
 
         if ( ! empty( $course_ids_in ) && $primary_pkg_id ) {
-            global $wpdb;
             $course_id   = ES_Packages::first_course_id( $course_ids_in );
             $course_name = ES_Packages::course_names_str( $course_ids_in );
             if ( $course_id ) {
@@ -922,6 +922,81 @@ class ES_Admin_Ajax {
             ES_Packages::set_staged_flow( $user_id, $flow_type );
         } else {
             ES_Packages::clear_staged_packages( $user_id );
+        }
+
+        // Create fresh "unpaid / in progress" placeholder payments as soon as
+        // After Call assigns packages, so the Payments tab reflects the admin
+        // action even before the student completes the purchase step.
+        if ( $needs_package ) {
+            $payments_table = $wpdb->prefix . 'es_payments';
+            $group_match    = $flow_type === 'group' && $group_id ? $group_id : 0;
+
+            $wpdb->query( $wpdb->prepare(
+                "DELETE FROM {$payments_table}
+                  WHERE user_id = %d
+                    AND status = 'pending'
+                    AND gateway = 'manual'
+                    AND payment_method = 'after_call_assign'
+                    AND flow_type = %s
+                    AND COALESCE(group_id, 0) = %d",
+                $user_id,
+                $flow_type,
+                $group_match
+            ) );
+
+            foreach ( $package_ids as $pending_pkg_id ) {
+                $pending_pkg = ES_Packages::get( $pending_pkg_id );
+                if ( ! $pending_pkg ) continue;
+
+                $pending_months       = max( 1, (int) ( $pending_pkg->months ?? 1 ) );
+                $pending_monthly      = max( 0, (int) ( $pending_pkg->monthly_session_limit ?? 0 ) );
+                $pending_total        = (int) ( $pending_pkg->total_sessions ?? 0 );
+                if ( $pending_total <= 0 && $pending_monthly > 0 ) {
+                    $pending_total = $pending_monthly * ( $pending_months + 1 );
+                }
+
+                $pending_course_id    = ES_Packages::first_course_id( $course_ids_in );
+                $pending_course_name  = $course_name;
+                if ( $flow_type === 'group' && $group_id ) {
+                    if ( ! $pending_course_id ) {
+                        $pending_course_id = ES_Packages::first_course_id( ES_Packages::get_group_course_ids( $group_id ) );
+                    }
+                    if ( $pending_course_name === '' ) {
+                        $pending_course_name = ES_Packages::course_names_str( ES_Packages::get_group_course_ids( $group_id ) );
+                    }
+                    if ( $pending_course_name === '' && $group && ! empty( $group->course_name ) ) {
+                        $pending_course_name = $group->course_name;
+                    }
+                }
+
+                $wpdb->insert( $payments_table, array(
+                    'user_id'               => $user_id,
+                    'package_id'            => (int) $pending_pkg_id,
+                    'package_name'          => $pending_pkg->package_name,
+                    'course_id'             => $pending_course_id ?: null,
+                    'course_name'           => $pending_course_name,
+                    'flow_type'             => $flow_type,
+                    'group_id'              => $flow_type === 'group' && $group_id ? $group_id : null,
+                    'amount'                => (float) ( $pending_pkg->price ?? 0 ),
+                    'monthly_price'         => (float) ( $pending_pkg->monthly_price ?? $pending_pkg->price ?? 0 ),
+                    'months'                => $pending_months,
+                    'monthly_session_limit' => $pending_monthly,
+                    'total_sessions'        => $pending_total,
+                    'used_sessions'         => 0,
+                    'currency'              => ! empty( $pending_pkg->currency ) ? $pending_pkg->currency : 'INR',
+                    'billing_cycle'         => 'after_call',
+                    'gateway'               => 'manual',
+                    'payment_method'        => 'after_call_assign',
+                    'gateway_session_id'    => $flow_type . '_after_call_pending_' . $user_id . '_' . $pending_pkg_id . '_' . time(),
+                    'status'                => 'pending',
+                    'meta'                  => wp_json_encode( array(
+                        'source'    => 'after_call_convert',
+                        'outcome'   => $outcome,
+                        'flow_type' => $flow_type,
+                        'group_id'  => $group_id,
+                    ) ),
+                ) );
+            }
         }
 
         $share_link = '';
@@ -1036,31 +1111,75 @@ class ES_Admin_Ajax {
         $valid_until   = date( 'Y-m-d H:i:s', strtotime( '+' . $sel_months . ' months', $valid_from_ts ) );
 
         global $wpdb;
-        $wpdb->insert( $wpdb->prefix . 'es_payments', array(
-            'user_id'               => $user_id,
-            'package_id'            => $package_id,
-            'package_name'          => $package->package_name,
-            'course_id'             => $course_id ?: null,
-            'course_name'           => $course_name,
-            'flow_type'             => $flow_type,
-            'group_id'              => $flow_type === 'group' && $group_id ? $group_id : null,
-            'amount'                => (float) ( $package->price ?? 0 ),
-            'monthly_price'         => (float) ( $package->monthly_price ?? $package->price ?? 0 ),
-            'months'                => $sel_months,
-            'monthly_session_limit' => $monthly_sessions,
-            'total_sessions'        => $total_sessions,
-            'used_sessions'         => 0,
-            'currency'              => ! empty( $package->currency ) ? $package->currency : 'INR',
-            'billing_cycle'         => 'after_call',
-            'gateway'               => 'manual',
-            'payment_method'        => 'student_selection',
-            'gateway_session_id'    => $flow_type . '_after_call_' . $user_id . '_' . $package_id . '_' . time(),
-            'status'                => 'paid',
-            'valid_from'            => $valid_from,
-            'valid_until'           => $valid_until,
-            'meta'                  => wp_json_encode( array( 'source' => 'student_select_package', 'outcome' => $outcome_label, 'flow_type' => $flow_type, 'group_id' => $group_id ) ),
+        $payments_table = $wpdb->prefix . 'es_payments';
+        $pending_payment = $wpdb->get_row( $wpdb->prepare(
+            "SELECT * FROM {$payments_table}
+              WHERE user_id = %d
+                AND package_id = %d
+                AND status = 'pending'
+                AND gateway = 'manual'
+                AND payment_method = 'after_call_assign'
+                AND flow_type = %s
+                AND COALESCE(group_id, 0) = %d
+              ORDER BY id DESC
+              LIMIT 1",
+            $user_id,
+            $package_id,
+            $flow_type,
+            $flow_type === 'group' && $group_id ? $group_id : 0
         ) );
-        $new_payment_id = (int) $wpdb->insert_id;
+
+        if ( $pending_payment ) {
+            $wpdb->update( $payments_table, array(
+                'package_name'          => $package->package_name,
+                'course_id'             => $course_id ?: null,
+                'course_name'           => $course_name,
+                'flow_type'             => $flow_type,
+                'group_id'              => $flow_type === 'group' && $group_id ? $group_id : null,
+                'amount'                => (float) ( $package->price ?? 0 ),
+                'monthly_price'         => (float) ( $package->monthly_price ?? $package->price ?? 0 ),
+                'months'                => $sel_months,
+                'monthly_session_limit' => $monthly_sessions,
+                'total_sessions'        => $total_sessions,
+                'used_sessions'         => 0,
+                'currency'              => ! empty( $package->currency ) ? $package->currency : 'INR',
+                'billing_cycle'         => 'after_call',
+                'gateway'               => 'manual',
+                'payment_method'        => 'student_selection',
+                'gateway_session_id'    => $flow_type . '_after_call_' . $user_id . '_' . $package_id . '_' . time(),
+                'status'                => 'paid',
+                'valid_from'            => $valid_from,
+                'valid_until'           => $valid_until,
+                'meta'                  => wp_json_encode( array( 'source' => 'student_select_package', 'outcome' => $outcome_label, 'flow_type' => $flow_type, 'group_id' => $group_id ) ),
+            ), array( 'id' => (int) $pending_payment->id ) );
+            $new_payment_id = (int) $pending_payment->id;
+        } else {
+            $wpdb->insert( $payments_table, array(
+                'user_id'               => $user_id,
+                'package_id'            => $package_id,
+                'package_name'          => $package->package_name,
+                'course_id'             => $course_id ?: null,
+                'course_name'           => $course_name,
+                'flow_type'             => $flow_type,
+                'group_id'              => $flow_type === 'group' && $group_id ? $group_id : null,
+                'amount'                => (float) ( $package->price ?? 0 ),
+                'monthly_price'         => (float) ( $package->monthly_price ?? $package->price ?? 0 ),
+                'months'                => $sel_months,
+                'monthly_session_limit' => $monthly_sessions,
+                'total_sessions'        => $total_sessions,
+                'used_sessions'         => 0,
+                'currency'              => ! empty( $package->currency ) ? $package->currency : 'INR',
+                'billing_cycle'         => 'after_call',
+                'gateway'               => 'manual',
+                'payment_method'        => 'student_selection',
+                'gateway_session_id'    => $flow_type . '_after_call_' . $user_id . '_' . $package_id . '_' . time(),
+                'status'                => 'paid',
+                'valid_from'            => $valid_from,
+                'valid_until'           => $valid_until,
+                'meta'                  => wp_json_encode( array( 'source' => 'student_select_package', 'outcome' => $outcome_label, 'flow_type' => $flow_type, 'group_id' => $group_id ) ),
+            ) );
+            $new_payment_id = (int) $wpdb->insert_id;
+        }
 
         if ( $flow_type === 'group' && $group_id ) {
             ES_Packages::add_user_to_group( $group_id, $user_id );

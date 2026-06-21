@@ -4,7 +4,7 @@
    Inspired by image 3 (calendar) and image 1 (slot modal)
 */
 
-#wpbody-content .es-admin {
+.wp-admin {
 
     /* Main Backgrounds */
     --es-bg: #f4f7fc;
@@ -96,6 +96,8 @@
     text-decoration: none;
     transition: all 0.12s;
     line-height: 1.2;
+    background-color: var(--es-indigo);
+    color: #ffffff;
 }
 .es-btn .dashicons {
     font-size: 16px;

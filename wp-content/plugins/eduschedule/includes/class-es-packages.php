@@ -1429,6 +1429,8 @@ class ES_Packages {
               WHERE bk.user_id = %d
                 AND bk.status != 'cancelled'
                 AND sl.slot_type = '1to1'
+                AND bk.payment_id IS NOT NULL
+                AND bk.payment_id > 0
               ORDER BY sl.slot_date DESC, sl.start_time DESC
               LIMIT %d",
             (int) $user_id, (int) $limit
@@ -1464,6 +1466,8 @@ class ES_Packages {
               WHERE bk.user_id = %d
                 AND bk.status != 'cancelled'
                 AND sl.slot_type = '1to1'
+                AND bk.payment_id IS NOT NULL
+                AND bk.payment_id > 0
               ORDER BY sl.slot_date DESC, sl.start_time DESC
               LIMIT %d",
             (int) $user_id, (int) $limit

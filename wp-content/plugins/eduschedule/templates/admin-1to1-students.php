@@ -65,10 +65,6 @@ if ( ! function_exists( 'es_user_sessions_left' ) ) {
                         if ( $sess && ! empty( $sess['plan'] ) ) {
                             $u_pkg = ES_Packages::get( $sess['plan']->package_id );
                         }
-                        if ( ! $u_pkg ) {
-                            $u_pkg_id = (int) get_user_meta( $u->ID, ES_Packages::META_PACKAGE_ID, true );
-                            if ( $u_pkg_id ) $u_pkg = ES_Packages::get( $u_pkg_id );
-                        }
                     ?>
                         <tr>
                             <td>
@@ -141,8 +137,7 @@ if ( ! function_exists( 'es_user_sessions_left' ) ) {
                 </div>
             <?php else :
                 $profile  = ES_Packages::get_student_profile( $selected->ID );
-                $pkg_id   = (int) get_user_meta( $selected->ID, ES_Packages::META_PACKAGE_ID, true );
-                $pkg      = $pkg_id ? ES_Packages::get( $pkg_id ) : null;
+                $pkg      = null;
                 $plan     = ES_Packages::get_active_plan( $selected->ID );
                 if ( ! $pkg && $plan ) $pkg = ES_Packages::get( $plan->package_id );
 

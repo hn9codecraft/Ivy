@@ -51,9 +51,6 @@ $sd_plan = ES_Packages::get_active_plan( $student['id'] );
 $sd_pkg  = null;
 if ( $sd_plan ) {
     $sd_pkg = ES_Packages::get( $sd_plan->package_id );
-} else {
-    $assigned_pkg_id = (int) get_user_meta( $student['id'], ES_Packages::META_PACKAGE_ID, true );
-    if ( $assigned_pkg_id ) $sd_pkg = ES_Packages::get( $assigned_pkg_id );
 }
 $sd_total = $sd_plan ? (int) ( $sd_plan->total_sessions ?? 0 ) : ( $sd_pkg ? (int) ( $sd_pkg->total_sessions ?? 0 ) : 0 );
 $sd_used  = $sd_plan ? (int) ( $sd_plan->used_sessions ?? 0 )  : 0;
@@ -420,7 +417,7 @@ if ( class_exists( 'GFAPI' ) ) {
                         $status_class = $is_active ? 'es-pill-success' : 'es-pill-info';
                         $status_text  = $is_active ? 'ACTIVE' : 'EXPIRED';
                     } elseif ( $pay_status === 'pending' ) {
-                        $status_class = 'es-pill-warning'; $status_text = 'PENDING';
+                        $status_class = 'es-pill-warning'; $status_text = 'UNPAID';
                     } else {
                         $status_class = 'es-pill-danger'; $status_text = strtoupper( $pay_status ?: 'FAILED' );
                     }
