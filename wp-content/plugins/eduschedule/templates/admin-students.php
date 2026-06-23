@@ -15,14 +15,10 @@ $base  = admin_url( 'admin.php?page=eduschedule-students' );
 
     <div class="es-page-head">
         <div>
-            <h1>Students</h1>
+            <h1>All Users</h1>
             <p class="es-page-sub">All registered students &mdash; <?php echo (int) $total; ?> shown</p>
         </div>
         <div class="es-page-actions">
-            <a href="<?php echo esc_url( add_query_arg( 'filter', 'all', $base ) ); ?>"
-               class="es-btn es-btn-ghost <?php echo $filter === 'all' ? 'is-active' : ''; ?>">All</a>
-            <a href="<?php echo esc_url( add_query_arg( 'filter', 'with_bookings', $base ) ); ?>"
-               class="es-btn es-btn-ghost <?php echo $filter === 'with_bookings' ? 'is-active' : ''; ?>">With Bookings</a>
             <button type="button" class="es-btn es-btn-primary" id="es-add-student-btn">
                 <span class="dashicons dashicons-plus"></span> Add Student
             </button>

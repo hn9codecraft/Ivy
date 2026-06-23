@@ -137,65 +137,7 @@ $base = admin_url( 'admin.php?page=eduschedule-packages' );
                 $pkg_videos = ES_Packages::get_package_videos( (int) $pkg->id );
                 $pkg_files  = ES_Packages::get_package_files( (int) $pkg->id );
                 ?>
-                <div class="es-pkgvids" data-package-id="<?php echo (int) $pkg->id; ?>">
-                    <div class="es-pkgvids-head">
-                        <div class="es-pkgvids-title">
-                            <span class="dashicons dashicons-portfolio"></span>
-                            Package Library
-                            <span class="es-pkgvids-count"><?php echo (int) ( count( $pkg_videos ) + count( $pkg_files ) ); ?></span>
-                        </div>
-                        <div style="display:inline-flex;gap:6px;">
-                            <input type="file" class="es-pkgfile-input" data-id="<?php echo (int) $pkg->id; ?>" accept=".pdf,.doc,.docx,.ppt,.pptx,.mp4,.mov,.webm,.mkv,.avi" style="display:none;" />
-                            <button type="button" class="es-btn es-btn-sm es-btn-ghost es-pkgfile-add" data-id="<?php echo (int) $pkg->id; ?>" title="Upload a file (PDF, DOC, PPT or video) from your computer">
-                                <span class="dashicons dashicons-upload"></span> File
-                            </button>
-                            <button type="button" class="es-btn es-btn-sm es-btn-ghost es-pkgvid-add" data-id="<?php echo (int) $pkg->id; ?>" title="Pick a video from the WordPress media library">
-                                <span class="dashicons dashicons-format-video"></span> Video
-                            </button>
-                        </div>
-                    </div>
-                    <div class="es-pkgvids-progress" data-id="<?php echo (int) $pkg->id; ?>" style="display:none;font-size:12px;color:#a5b4fc;margin-bottom:8px;">Uploading…</div>
-                    <div class="es-pkgvids-grid">
-                        <?php if ( empty( $pkg_videos ) && empty( $pkg_files ) ) : ?>
-                            <p class="es-pkgvids-empty">No course materials yet — files and videos you add here are visible to every student of this package, automatically.</p>
-                        <?php else : ?>
-                            <?php foreach ( $pkg_videos as $pv ) : ?>
-                                <div class="es-pkgvid-card" data-video-id="<?php echo (int) $pv->id; ?>">
-                                    <a href="<?php echo esc_url( $pv->video_url ); ?>" target="_blank" rel="noopener" class="es-pkgvid-thumb">
-                                        <span class="es-pkgvid-play">▶</span>
-                                    </a>
-                                    <div class="es-pkgvid-meta">
-                                        <div class="es-pkgvid-title-row">
-                                            <span class="es-pkgvid-title"><?php echo esc_html( $pv->title ); ?></span>
-                                            <button type="button" class="es-pkgvid-del" data-id="<?php echo (int) $pv->id; ?>" aria-label="Delete">×</button>
-                                        </div>
-                                        <?php if ( ! empty( $pv->duration ) ) : ?>
-                                            <div class="es-pkgvid-dur">⏱ <?php echo esc_html( $pv->duration ); ?></div>
-                                        <?php endif; ?>
-                                    </div>
-                                </div>
-                            <?php endforeach; ?>
-                            <?php foreach ( $pkg_files as $pf ) :
-                                $pf_size = $pf->file_size ? size_format( (int) $pf->file_size ) : '';
-                            ?>
-                                <div class="es-pkgvid-card es-pkgfile-card" data-file-id="<?php echo (int) $pf->id; ?>">
-                                    <a href="<?php echo esc_url( $pf->file_url ); ?>" target="_blank" rel="noopener" class="es-pkgfile-thumb">
-                                        <span class="es-pkgfile-type"><?php echo esc_html( strtoupper( $pf->file_type ) ); ?></span>
-                                    </a>
-                                    <div class="es-pkgvid-meta">
-                                        <div class="es-pkgvid-title-row">
-                                            <span class="es-pkgvid-title"><?php echo esc_html( $pf->file_name ); ?></span>
-                                            <button type="button" class="es-pkgfile-del" data-id="<?php echo (int) $pf->id; ?>" aria-label="Delete">×</button>
-                                        </div>
-                                        <?php if ( $pf_size ) : ?>
-                                            <div class="es-pkgvid-dur"><?php echo esc_html( $pf_size ); ?></div>
-                                        <?php endif; ?>
-                                    </div>
-                                </div>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
-                    </div>
-                </div>
+               
             </div>
         <?php endforeach; endif; ?>
     </div>
@@ -288,61 +230,7 @@ $base = admin_url( 'admin.php?page=eduschedule-packages' );
                 $pkg_videos = ES_Packages::get_package_videos( (int) $pkg->id );
                 $pkg_files  = ES_Packages::get_package_files( (int) $pkg->id );
                 ?>
-                <div class="es-pkgvids" data-package-id="<?php echo (int) $pkg->id; ?>">
-                    <div class="es-pkgvids-head">
-                        <div class="es-pkgvids-title">
-                            <span class="dashicons dashicons-portfolio"></span>
-                            Package Library
-                            <span class="es-pkgvids-count"><?php echo (int) ( count( $pkg_videos ) + count( $pkg_files ) ); ?></span>
-                        </div>
-                        <div style="display:inline-flex;gap:6px;">
-                            <input type="file" class="es-pkgfile-input" data-id="<?php echo (int) $pkg->id; ?>" accept=".pdf,.doc,.docx,.ppt,.pptx,.mp4,.mov,.webm,.mkv,.avi" style="display:none;" />
-                            <button type="button" class="es-btn es-btn-sm es-btn-ghost es-pkgfile-add" data-id="<?php echo (int) $pkg->id; ?>" title="Upload a file">
-                                <span class="dashicons dashicons-upload"></span> File
-                            </button>
-                            <button type="button" class="es-btn es-btn-sm es-btn-ghost es-pkgvid-add" data-id="<?php echo (int) $pkg->id; ?>" title="Pick a video from the media library">
-                                <span class="dashicons dashicons-format-video"></span> Video
-                            </button>
-                        </div>
-                    </div>
-                    <div class="es-pkgvids-progress" data-id="<?php echo (int) $pkg->id; ?>" style="display:none;font-size:12px;color:#a5b4fc;margin-bottom:8px;">Uploading…</div>
-                    <div class="es-pkgvids-grid">
-                        <?php if ( empty( $pkg_videos ) && empty( $pkg_files ) ) : ?>
-                            <p class="es-pkgvids-empty">No course materials yet.</p>
-                        <?php else : ?>
-                            <?php foreach ( $pkg_videos as $pv ) : ?>
-                                <div class="es-pkgvid-card" data-video-id="<?php echo (int) $pv->id; ?>">
-                                    <a href="<?php echo esc_url( $pv->video_url ); ?>" target="_blank" rel="noopener" class="es-pkgvid-thumb"><span class="es-pkgvid-play">▶</span></a>
-                                    <div class="es-pkgvid-meta">
-                                        <div class="es-pkgvid-title-row">
-                                            <span class="es-pkgvid-title"><?php echo esc_html( $pv->title ); ?></span>
-                                            <button type="button" class="es-pkgvid-del" data-id="<?php echo (int) $pv->id; ?>" aria-label="Delete">×</button>
-                                        </div>
-                                        <?php if ( ! empty( $pv->duration ) ) : ?>
-                                            <div class="es-pkgvid-dur">⏱ <?php echo esc_html( $pv->duration ); ?></div>
-                                        <?php endif; ?>
-                                    </div>
-                                </div>
-                            <?php endforeach; ?>
-                            <?php foreach ( $pkg_files as $pf ) :
-                                $pf_size = $pf->file_size ? size_format( (int) $pf->file_size ) : '';
-                            ?>
-                                <div class="es-pkgvid-card es-pkgfile-card" data-file-id="<?php echo (int) $pf->id; ?>">
-                                    <a href="<?php echo esc_url( $pf->file_url ); ?>" target="_blank" rel="noopener" class="es-pkgfile-thumb"><span class="es-pkgfile-type"><?php echo esc_html( strtoupper( $pf->file_type ) ); ?></span></a>
-                                    <div class="es-pkgvid-meta">
-                                        <div class="es-pkgvid-title-row">
-                                            <span class="es-pkgvid-title"><?php echo esc_html( $pf->file_name ); ?></span>
-                                            <button type="button" class="es-pkgfile-del" data-id="<?php echo (int) $pf->id; ?>" aria-label="Delete">×</button>
-                                        </div>
-                                        <?php if ( $pf_size ) : ?>
-                                            <div class="es-pkgvid-dur"><?php echo esc_html( $pf_size ); ?></div>
-                                        <?php endif; ?>
-                                    </div>
-                                </div>
-                            <?php endforeach; ?>
-                        <?php endif; ?>
-                    </div>
-                </div>
+               
             </div>
         <?php endforeach; endif; ?>
     </div>
@@ -507,6 +395,21 @@ $base = admin_url( 'admin.php?page=eduschedule-packages' );
                     <small class="es-field-hint">Total Price = Monthly Price × Months &nbsp;·&nbsp; Total Sessions = Monthly Limit × Months</small>
                 </div>
             </div>
+                <div class="es-modal-row" style="margin-top:14px;">
+                    <div class="es-field">
+                        <label class="es-label">Discount %</label>
+                        <input type="number" id="es-pkg-discount-percent" placeholder="12" step="0.1" min="0" max="100" />
+                        <small class="es-field-hint">Optional. For frontend discounted plan toggle.</small>
+                    </div>
+                    <div class="es-field">
+                        <label class="es-label">Discount Months</label>
+                        <input type="number" id="es-pkg-discount-months" placeholder="6" step="1" min="0" max="60" />
+                        <small class="es-field-hint">e.g. 12% off for 6 months.</small>
+                    </div>
+                </div>
+            </div>
+
+          
 
             <!-- Section: Details -->
             <div style="margin-bottom:8px;">
@@ -538,240 +441,3 @@ $base = admin_url( 'admin.php?page=eduschedule-packages' );
     </div>
 </div>
 
-<style>
-.es-packages-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-    gap: 20px;
-    margin-top: 24px;
-}
-
-.es-package-card {
-    background: #ffffff;
-    border: 1px solid rgba(255,255,255,0.1);
-    border-radius: 12px;
-    padding: 20px;
-    transition: all 0.2s;
-}
-
-.es-package-card:hover {
-    border-color: #6366f1;
-    box-shadow: 0 8px 24px rgba(99,102,241,0.15);
-}
-
-.es-package-card.is-inactive {
-    opacity: 0.6;
-}
-
-.es-package-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 12px;
-    margin-bottom: 16px;
-}
-
-.es-package-name {
-    font-size: 18px;
-    font-weight: 600;
-    margin: 0 0 4px 0;
-}
-
-.es-package-sub {
-    font-size: 13px;
-    margin: 0;
-}
-
-.es-package-actions {
-    display: flex;
-    gap: 6px;
-}
-
-.es-package-price {
-    font-size: 28px;
-    font-weight: 700;
-    color: #6366f1;
-    margin-bottom: 12px;
-}
-
-.es-package-period {
-    font-size: 14px;
-    font-weight: 400;
-    color: rgba(255,255,255,0.5);
-}
-
-.es-package-hours {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
-    background: rgba(99,102,241,0.15);
-    color: #6366f1;
-    border-radius: 6px;
-    font-size: 13px;
-    font-weight: 500;
-    margin-bottom: 12px;
-}
-
-.es-package-hours .dashicons {
-    font-size: 16px;
-    width: 16px;
-    height: 16px;
-}
-
-.es-package-yearly {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    padding: 6px 12px;
-    background: rgba(16,185,129,0.12);
-    color: #10b981;
-    border-radius: 6px;
-    font-size: 13px;
-    font-weight: 500;
-    margin-bottom: 12px;
-    margin-left: 6px;
-}
-.es-package-yearly .dashicons { font-size: 16px; width: 16px; height: 16px; }
-.es-package-yearly small { opacity: 0.8; font-weight: 400; }
-
-.es-package-desc {
-    font-size: 14px;
-    line-height: 1.6;
-    white-space: pre-wrap;
-    margin-top: 12px;
-    overflow: visible;
-    max-height: none;
-    word-break: break-word;
-}
-
-.es-package-status {
-    margin-top: 12px;
-    padding-top: 12px;
-    border-top: 1px solid rgba(255,255,255,0.1);
-}
-
-.es-modal-lg {
-    max-width: 700px;
-}
-
-/* ── v4.4 — Per-package "global" videos on the Packages admin page ── */
-.es-pkgvids {
-    margin-top: 14px;
-    padding-top: 14px;
-    border-top: 1px solid rgba(255,255,255,0.10);
-}
-.es-pkgvids-head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    margin-bottom: 10px;
-}
-.es-pkgvids-title {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    font-size: 12px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-    color: rgba(255,255,255,0.85);
-}
-.es-pkgvids-title .dashicons { font-size: 16px; width: 16px; height: 16px; }
-.es-pkgvids-count {
-    background: rgba(99,102,241,0.2);
-    color: #c7d2fe;
-    border-radius: 999px;
-    padding: 1px 8px;
-    font-size: 11px;
-    font-weight: 600;
-}
-.es-pkgvids-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 8px;
-}
-.es-pkgvids-empty {
-    grid-column: 1 / -1;
-    margin: 0;
-    padding: 12px;
-    background: rgba(255,255,255,0.05);
-    border: 1px dashed rgba(255,255,255,0.15);
-    border-radius: 8px;
-    font-size: 12.5px;
-    color: rgba(255,255,255,0.65);
-    text-align: center;
-}
-.es-pkgvid-card {
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.10);
-    border-radius: 10px;
-    overflow: hidden;
-    display: flex;
-    flex-direction: column;
-}
-.es-pkgvid-thumb {
-    aspect-ratio: 16 / 9;
-    background: linear-gradient(135deg, #4338ca 0%, #6366f1 100%);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #fff;
-    text-decoration: none;
-    font-size: 22px;
-    line-height: 1;
-}
-.es-pkgvid-thumb:hover { opacity: 0.92; }
-.es-pkgfile-thumb {
-    aspect-ratio: 16 / 9;
-    background: linear-gradient(135deg, #0f766e 0%, #14b8a6 100%);
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    color: #fff;
-    text-decoration: none;
-}
-.es-pkgfile-thumb:hover { opacity: 0.92; }
-.es-pkgfile-type {
-    font-size: 13px;
-    font-weight: 700;
-    letter-spacing: 0.05em;
-    padding: 4px 10px;
-    background: rgba(255,255,255,0.18);
-    border-radius: 6px;
-}
-.es-pkgvid-meta { padding: 8px 10px; }
-.es-pkgvid-title-row {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 6px;
-}
-.es-pkgvid-title {
-    font-size: 12.5px;
-    font-weight: 500;
-    color: #fff;
-    line-height: 1.3;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    display: -webkit-box;
-    -webkit-line-clamp: 2;
-    -webkit-box-orient: vertical;
-}
-.es-pkgvid-del {
-    background: transparent;
-    border: 0;
-    color: rgba(255,255,255,0.55);
-    cursor: pointer;
-    font-size: 16px;
-    line-height: 1;
-    padding: 0 2px;
-}
-.es-pkgvid-del:hover { color: #f87171; }
-.es-pkgvid-dur {
-    font-size: 11px;
-    color: rgba(255,255,255,0.55);
-    margin-top: 3px;
-}
-</style>
