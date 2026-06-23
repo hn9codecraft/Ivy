@@ -455,18 +455,6 @@ $base = admin_url( 'admin.php?page=eduschedule-packages' );
                         <small class="es-field-hint">Amount charged per month.</small>
                     </div>
                 </div>
-                <div class="es-modal-row" style="margin-top:14px;">
-                    <div class="es-field">
-                        <label class="es-label">Discount %</label>
-                        <input type="number" id="es-pkg-discount-percent" placeholder="12" step="0.1" min="0" max="100" />
-                        <small class="es-field-hint">Optional. For frontend discounted plan toggle.</small>
-                    </div>
-                    <div class="es-field">
-                        <label class="es-label">Discount Months</label>
-                        <input type="number" id="es-pkg-discount-months" placeholder="6" step="1" min="0" max="60" />
-                        <small class="es-field-hint">e.g. 12% off for 6 months.</small>
-                    </div>
-                </div>
             </div>
 
             <!-- Section: Sessions -->
@@ -482,6 +470,19 @@ $base = admin_url( 'admin.php?page=eduschedule-packages' );
                         <label class="es-label">Monthly Session Limit</label>
                         <input type="number" id="es-pkg-monthly-sessions" placeholder="8" step="1" min="0" />
                         <small class="es-field-hint">Sessions a student can use each month.</small>
+                    </div>
+                </div>
+
+                <div class="es-modal-row" style="margin-top:14px;">
+                    <div class="es-field">
+                        <label class="es-label">Discount %</label>
+                        <input type="number" id="es-pkg-discount-percent" placeholder="12" step="0.1" min="0" max="100" />
+                        <small class="es-field-hint">Optional. For frontend discounted plan toggle.</small>
+                    </div>
+                    <div class="es-field">
+                        <label class="es-label">Discount Months</label>
+                        <input type="number" id="es-pkg-discount-months" placeholder="6" step="1" min="0" max="60" />
+                        <small class="es-field-hint">e.g. 12% off for 6 months.</small>
                     </div>
                 </div>
 

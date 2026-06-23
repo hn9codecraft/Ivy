@@ -428,6 +428,12 @@ class ES_Admin_Ajax {
             'status'    => 'confirmed',
             'user_note' => $note,
         );
+        if ( $slot->slot_type === '1to1' ) {
+            $plan = ES_Packages::get_active_plan( $user_id, '1to1' );
+            if ( $plan ) {
+                $data['payment_id'] = (int) $plan->id;
+            }
+        }
 
         // Create Zoom meeting if applicable
         if ( ES_Zoom::is_configured() && stripos( $slot->platform, 'zoom' ) !== false ) {
@@ -474,6 +480,7 @@ class ES_Admin_Ajax {
      */
     public function create_meeting() {
         $this->check();
+        global $wpdb;
 
         $type     = isset( $_POST['slot_type'] ) ? sanitize_text_field( wp_unslash( $_POST['slot_type'] ) ) : '1to1';
         if ( ! in_array( $type, array( '1to1', 'group' ), true ) ) {
@@ -516,6 +523,96 @@ class ES_Admin_Ajax {
             $users[] = $u;
         }
 
+        $resolved_payment_id   = 0;
+        $resolved_group_id     = 0;
+        $resolved_package_id   = 0;
+        $resolved_package_name = '';
+        $resolved_course_id    = 0;
+        $resolved_course_name  = '';
+
+        if ( $type === '1to1' ) {
+            $student_id = (int) $user_ids[0];
+            $plan = ES_Packages::get_active_plan( $student_id, '1to1' );
+            if ( ! $plan ) {
+                wp_send_json_error( array( 'message' => 'This 1:1 student has no active package. Use After Call or Purchase Package first.' ) );
+            }
+
+            $resolved_payment_id   = (int) $plan->id;
+            $resolved_package_id   = (int) ( $plan->package_id ?? 0 );
+            $resolved_package_name = ! empty( $plan->package_name ) ? $plan->package_name : '';
+            if ( ! $resolved_package_name && $resolved_package_id ) {
+                $pkg = ES_Packages::get( $resolved_package_id );
+                $resolved_package_name = $pkg ? $pkg->package_name : '';
+            }
+            $resolved_course_id   = (int) ( $plan->course_id ?? 0 );
+            $resolved_course_name = ! empty( $plan->course_name ) ? $plan->course_name : '';
+            if ( ! $resolved_course_id ) {
+                $resolved_course_id = ES_Packages::first_course_id( ES_Packages::get_student_course_ids( $student_id ) );
+            }
+            if ( ! $resolved_course_name && $resolved_course_id ) {
+                $resolved_course_name = ES_Packages::course_name( $resolved_course_id );
+            }
+        } else {
+            $common_group_ids = null;
+            foreach ( $user_ids as $uid ) {
+                $user_group_ids = array_map( 'intval', wp_list_pluck( ES_Packages::get_user_groups( $uid ), 'id' ) );
+                if ( $common_group_ids === null ) {
+                    $common_group_ids = $user_group_ids;
+                } else {
+                    $common_group_ids = array_values( array_intersect( $common_group_ids, $user_group_ids ) );
+                }
+            }
+
+            if ( empty( $common_group_ids ) ) {
+                wp_send_json_error( array( 'message' => 'Selected users do not share a group. Please use the Group detail page or choose users from the same group.' ) );
+            }
+
+            foreach ( $common_group_ids as $candidate_gid ) {
+                $candidate_payments = ES_Packages::get_group_payments( (int) $candidate_gid, true );
+                foreach ( (array) $candidate_payments as $pay ) {
+                    $left  = max( 0, (int) ( $pay->total_sessions ?? 0 ) - (int) ( $pay->used_sessions ?? 0 ) );
+                    $valid = empty( $pay->valid_until ) || strtotime( $pay->valid_until ) >= current_time( 'timestamp' );
+                    if ( $left > 0 && $valid ) {
+                        $resolved_group_id     = (int) $candidate_gid;
+                        $resolved_payment_id   = (int) $pay->id;
+                        $resolved_package_id   = (int) ( $pay->package_id ?? 0 );
+                        $resolved_package_name = ! empty( $pay->package_name ) ? $pay->package_name : '';
+                        $resolved_course_id    = (int) ( $pay->course_id ?? 0 );
+                        $resolved_course_name  = ! empty( $pay->course_name ) ? $pay->course_name : '';
+                        break 2;
+                    }
+                }
+            }
+
+            if ( ! $resolved_group_id ) {
+                wp_send_json_error( array( 'message' => 'No active shared group package was found for the selected users.' ) );
+            }
+
+            if ( ! $resolved_package_name && $resolved_package_id ) {
+                $pkg = ES_Packages::get( $resolved_package_id );
+                $resolved_package_name = $pkg ? $pkg->package_name : '';
+            }
+            if ( ! $resolved_course_name && $resolved_course_id ) {
+                $resolved_course_name = ES_Packages::course_name( $resolved_course_id );
+            }
+        }
+
+        if ( $resolved_package_id ) {
+            $data['package_id'] = $resolved_package_id;
+        }
+        if ( $resolved_package_name !== '' ) {
+            $data['package_name'] = $resolved_package_name;
+        }
+        if ( $resolved_course_id ) {
+            $data['course_id'] = $resolved_course_id;
+        }
+        if ( $resolved_course_name !== '' ) {
+            $data['course_name'] = $resolved_course_name;
+        }
+        if ( $type === 'group' && $resolved_group_id ) {
+            $data['group_id'] = $resolved_group_id;
+        }
+
         // 1. Create slot
         $slot_id = ES_DB::insert_slot( $data );
         if ( ! $slot_id ) wp_send_json_error( array( 'message' => 'Could not create slot.' ) );
@@ -534,6 +631,7 @@ class ES_Admin_Ajax {
                 'user_id'   => (int) $u->ID,
                 'status'    => 'confirmed',
                 'user_note' => $note,
+                'payment_id' => $resolved_payment_id ?: null,
             );
 
             if ( $zoom_active ) {
@@ -570,6 +668,14 @@ class ES_Admin_Ajax {
             // Rollback: delete the slot we just created since no booking succeeded
             ES_DB::delete_slot( (int) $slot_id );
             wp_send_json_error( array( 'message' => 'Could not create any bookings. ' . implode( ' / ', $errors ) ) );
+        }
+
+        if ( $type === '1to1' ) {
+            foreach ( $user_ids as $uid ) {
+                ES_Packages::recount_used_sessions( (int) $uid );
+            }
+        } elseif ( $resolved_group_id ) {
+            ES_Packages::recount_group_used_sessions( (int) $resolved_group_id );
         }
 
         $msg = sprintf( 'Meeting created with %d user(s).', count( $created ) );
@@ -903,6 +1009,7 @@ class ES_Admin_Ajax {
             ES_Packages::set_student_course_ids( $user_id, $course_ids_in );
         }
 
+        $course_name = '';
         if ( ! empty( $course_ids_in ) && $primary_pkg_id ) {
             $course_id   = ES_Packages::first_course_id( $course_ids_in );
             $course_name = ES_Packages::course_names_str( $course_ids_in );
@@ -952,7 +1059,7 @@ class ES_Admin_Ajax {
                 $pending_monthly      = max( 0, (int) ( $pending_pkg->monthly_session_limit ?? 0 ) );
                 $pending_total        = (int) ( $pending_pkg->total_sessions ?? 0 );
                 if ( $pending_total <= 0 && $pending_monthly > 0 ) {
-                    $pending_total = $pending_monthly * ( $pending_months + 1 );
+                    $pending_total = $pending_monthly * $pending_months;
                 }
 
                 $pending_course_id    = ES_Packages::first_course_id( $course_ids_in );
@@ -1104,7 +1211,7 @@ class ES_Admin_Ajax {
         $sel_months       = max( 1, (int) ( $package->months ?? 1 ) );
         $monthly_sessions = max( 0, (int) ( $package->monthly_session_limit ?? 0 ) );
         $total_sessions   = (int) ( $package->total_sessions ?? 0 );
-        if ( $total_sessions <= 0 && $monthly_sessions > 0 ) $total_sessions = $monthly_sessions * ( $sel_months + 1 );
+        if ( $total_sessions <= 0 && $monthly_sessions > 0 ) $total_sessions = $monthly_sessions * $sel_months;
 
         $valid_from_ts = current_time( 'timestamp' );
         $valid_from    = date( 'Y-m-d H:i:s', $valid_from_ts );
@@ -1192,8 +1299,8 @@ class ES_Admin_Ajax {
             if ( $group && empty( $group->course_id ) && $course_id ) $group_update['course_ids'] = implode( ',', array( $course_id ) );
             if ( ! empty( $group_update ) ) ES_Packages::update_group( $group_id, $group_update );
         } else {
-            update_user_meta( $user_id, ES_Packages::META_HAS_1TO1, 1 );
-            update_user_meta( $user_id, ES_Packages::META_PACKAGE_ID, $package_id );
+            delete_user_meta( $user_id, ES_Packages::META_HAS_1TO1 );
+            delete_user_meta( $user_id, ES_Packages::META_PACKAGE_ID );
         }
 
         ES_Packages::clear_token( $user_id );

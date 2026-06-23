@@ -235,6 +235,31 @@ if ( ! function_exists( 'es_user_sessions_left' ) ) {
                     }
                     $att_package_groups[ $key ]['rows'][] = $att_sess;
                 }
+
+                $gf_data = array();
+                if ( class_exists( 'GFAPI' ) ) {
+                    $forms = GFAPI::get_forms();
+                    if ( ! empty( $forms ) ) {
+                        foreach ( $forms as $form ) {
+                            $entries = GFAPI::get_entries( $form['id'], array(
+                                'field_filters' => array( array( 'key' => 'created_by', 'value' => $selected->ID ) ),
+                            ) );
+                            if ( is_wp_error( $entries ) || empty( $entries ) ) continue;
+                            foreach ( $entries as $entry ) {
+                                foreach ( $form['fields'] as $field ) {
+                                    $value = rgar( $entry, (string) $field->id );
+                                    if ( empty( $value ) ) continue;
+                                    if ( ! isset( $gf_data[ $field->label ] ) ) $gf_data[ $field->label ] = $value;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                $profile_parent = ! empty( $profile['parent'] ) ? $profile['parent'] : ( $gf_data['Parent Name'] ?? '' );
+                $profile_source = ! empty( $profile['source'] ) ? $profile['source'] : ( $gf_data['Source'] ?? '' );
+                $profile_goal   = ! empty( $profile['goal'] ) ? $profile['goal'] : ( $gf_data['What is your primary goal for your scholar today?'] ?? '' );
+                $profile_band   = ! empty( $profile['band'] ) ? $profile['band'] : ( $gf_data["What is the student's current academic level?"] ?? '' );
             ?>
                 <div class="es-tabui-detail" data-target-type="1to1" data-target-id="<?php echo (int) $selected->ID; ?>">
 
@@ -415,13 +440,29 @@ if ( ! function_exists( 'es_user_sessions_left' ) ) {
                             <div class="es-card" style="padding:18px 20px;">
                                 <div class="es-section-label">Student Details</div>
                                 <form id="es-profile-form" data-user-id="<?php echo (int) $selected->ID; ?>">
+                                    <div class="es-detail-row">
+                                        <span>Email</span>
+                                        <div style="text-align:right;"><?php echo $profile['email'] !== '' ? esc_html( $profile['email'] ) : '—'; ?></div>
+                                    </div>
+                                    <div class="es-detail-row">
+                                        <span>Country</span>
+                                        <div style="text-align:right;"><?php echo get_user_meta( $selected->ID, 'es_country', true ) !== '' ? esc_html( get_user_meta( $selected->ID, 'es_country', true ) ) : '—'; ?></div>
+                                    </div>
+                                    <div class="es-detail-row">
+                                        <span>Timezone</span>
+                                        <div style="text-align:right;"><?php echo get_user_meta( $selected->ID, 'es_timezone', true ) !== '' ? esc_html( get_user_meta( $selected->ID, 'es_timezone', true ) ) : '—'; ?></div>
+                                    </div>
+                                    <div class="es-detail-row">
+                                        <span>Joined</span>
+                                        <div style="text-align:right;"><?php echo esc_html( date_i18n( 'M j, Y', strtotime( $selected->user_registered ) ) ); ?></div>
+                                    </div>
                                     <?php
                                     $rows = array(
-                                        'parent' => array( 'Parent', $profile['parent'] ),
-                                        'phone'  => array( 'Phone',  $profile['phone'] ),
-                                        'source' => array( 'Source', $profile['source'] ),
-                                        'goal'   => array( 'Goal',   $profile['goal'] ),
-                                        'band'   => array( 'Level / Band', $profile['band'] ),
+                                        'phone'    => array( 'Phone',  $profile['phone'] ),
+                                        'parent'   => array( 'Parent', $profile_parent ),
+                                        'source'   => array( 'Source', $profile_source ),
+                                        'goal'     => array( 'Goal',   $profile_goal ),
+                                        'band'     => array( 'Level / Band', $profile_band ),
                                     );
                                     foreach ( $rows as $k => $info ) : ?>
                                         <div class="es-detail-row">
@@ -536,7 +577,6 @@ if ( ! function_exists( 'es_user_sessions_left' ) ) {
                                                 <th>Title</th>
                                                 <th>Platform</th>
                                                 <th>Status</th>
-                                                <th>Meeting</th>
                                                 <th>Files / Videos</th>
                                                 <th>Actions</th>
                                             </tr>
@@ -559,16 +599,6 @@ if ( ! function_exists( 'es_user_sessions_left' ) ) {
                                                     </td>
                                                     <td><?php echo esc_html( $row->platform ?: '—' ); ?></td>
                                                     <td><span class="es-pill es-pill-success"><?php echo esc_html( $st_status ); ?></span></td>
-                                                    <td>
-                                                        <?php if ( ! empty( $row->zoom_join_url ) ) : ?>
-                                                            <a href="<?php echo esc_url( $row->zoom_join_url ); ?>" target="_blank" rel="noopener" class="es-btn es-btn-ghost es-btn-sm">Join</a>
-                                                            <?php if ( ! empty( $row->zoom_meeting_id ) ) : ?>
-                                                                <div class="es-cell-sub">ID: <?php echo esc_html( $row->zoom_meeting_id ); ?></div>
-                                                            <?php endif; ?>
-                                                        <?php else : ?>
-                                                            <span class="es-cell-sub">—</span>
-                                                        <?php endif; ?>
-                                                    </td>
                                                     <td>
                                                         <div style="display:flex;flex-direction:column;gap:6px;align-items:flex-start;">
                                                             <?php if ( ! empty( $row_files ) ) : ?>

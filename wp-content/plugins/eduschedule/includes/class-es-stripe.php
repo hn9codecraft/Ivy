@@ -286,8 +286,9 @@ class ES_Stripe {
             return $pkg_months;
         }
         $disc_months = (int) ( $pkg->discount_months ?? 0 );
-        // Clamp to the package's own duration and fall back to it when unset.
-        $disc_months = max( 0, min( $pkg_months, $disc_months ) );
+        // For the yearly/discounted toggle, use the configured discount months
+        // exactly as entered. When unset or invalid, fall back to package months.
+        $disc_months = max( 0, $disc_months );
         return $disc_months > 0 ? $disc_months : $pkg_months;
     }
 
@@ -321,7 +322,7 @@ class ES_Stripe {
             if ( $billing_cycle === 'yearly' ) {
                 $year_months = self::effective_term_months( $pkg, 'yearly' ); // = discount_months (or pkg months fallback)
                 $discount    = max( 0, min( 100, (float) ( $pkg->discount_percent ?? 0 ) ) );
-                $disc_months = max( 0, min( $months, (int) ( $pkg->discount_months ?? 0 ) ) );
+                $disc_months = $year_months;
 
                 $gross    = $monthly_price * $year_months;
                 $discount_amount = ( $discount > 0 && $disc_months > 0 )
@@ -348,7 +349,7 @@ class ES_Stripe {
         // monthly rate, discount applied to those months (same model as above).
         $year_months = self::effective_term_months( $pkg, 'yearly' );
         $discount    = max( 0, min( 100, (float) ( $pkg->discount_percent ?? 0 ) ) );
-        $disc_months = max( 0, min( $months, (int) ( $pkg->discount_months ?? 0 ) ) );
+        $disc_months = $year_months;
         if ( $discount > 0 && $disc_months > 0 ) {
             $gross           = $price * $year_months;
             $discount_amount = $price * $disc_months * $discount / 100;
@@ -398,7 +399,7 @@ class ES_Stripe {
         // total_sessions.
         $pkg_total = (int) ( $pkg->total_sessions ?? 0 );
         if ( $monthly_limit > 0 ) {
-            $total_sessions = $monthly_limit * ( $months + 1 );
+            $total_sessions = $monthly_limit * $months;
         } elseif ( $pkg_total > 0 ) {
             $total_sessions = $pkg_total;
         } else {
@@ -633,10 +634,8 @@ class ES_Stripe {
         // sessions in 1:1 section").
         $row = self::backfill_sessions_if_missing( $row );
 
-        // Assign package to user only for 1:1 flow. Group payments must not overwrite 1:1 package meta.
-        if ( empty( $row->flow_type ) || $row->flow_type !== 'group' ) {
-            update_user_meta( $row->user_id, ES_Packages::META_PACKAGE_ID, (int) $row->package_id );
-        }
+        // 1:1 package ownership is derived from payments, not user meta.
+        delete_user_meta( $row->user_id, ES_Packages::META_PACKAGE_ID );
         if ( ! empty( $row->group_id ) ) {
             update_user_meta( $row->user_id, ES_Packages::META_HAS_GROUP, 1 );
             update_user_meta( $row->user_id, ES_Packages::META_GROUP_ID, (int) $row->group_id );
@@ -808,10 +807,8 @@ class ES_Stripe {
             array( 'id' => $row->id )
         );
 
-        // Assign package to user only for 1:1 flow. Group payments must not overwrite 1:1 package meta.
-        if ( empty( $row->flow_type ) || $row->flow_type !== 'group' ) {
-            update_user_meta( $row->user_id, ES_Packages::META_PACKAGE_ID, (int) $row->package_id );
-        }
+        // 1:1 package ownership is derived from payments, not user meta.
+        delete_user_meta( $row->user_id, ES_Packages::META_PACKAGE_ID );
         if ( ! empty( $row->group_id ) ) {
             update_user_meta( $row->user_id, ES_Packages::META_HAS_GROUP, 1 );
             update_user_meta( $row->user_id, ES_Packages::META_GROUP_ID, (int) $row->group_id );
