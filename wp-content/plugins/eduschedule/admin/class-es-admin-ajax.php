@@ -428,6 +428,12 @@ class ES_Admin_Ajax {
             'status'    => 'confirmed',
             'user_note' => $note,
         );
+        if ( $slot->slot_type === '1to1' ) {
+            $plan = ES_Packages::get_active_plan( $user_id, '1to1' );
+            if ( $plan ) {
+                $data['payment_id'] = (int) $plan->id;
+            }
+        }
 
         // Create Zoom meeting if applicable
         if ( ES_Zoom::is_configured() && stripos( $slot->platform, 'zoom' ) !== false ) {
@@ -474,6 +480,7 @@ class ES_Admin_Ajax {
      */
     public function create_meeting() {
         $this->check();
+        global $wpdb;
 
         $type     = isset( $_POST['slot_type'] ) ? sanitize_text_field( wp_unslash( $_POST['slot_type'] ) ) : '1to1';
         if ( ! in_array( $type, array( '1to1', 'group' ), true ) ) {
@@ -516,6 +523,96 @@ class ES_Admin_Ajax {
             $users[] = $u;
         }
 
+        $resolved_payment_id   = 0;
+        $resolved_group_id     = 0;
+        $resolved_package_id   = 0;
+        $resolved_package_name = '';
+        $resolved_course_id    = 0;
+        $resolved_course_name  = '';
+
+        if ( $type === '1to1' ) {
+            $student_id = (int) $user_ids[0];
+            $plan = ES_Packages::get_active_plan( $student_id, '1to1' );
+            if ( ! $plan ) {
+                wp_send_json_error( array( 'message' => 'This 1:1 student has no active package. Use After Call or Purchase Package first.' ) );
+            }
+
+            $resolved_payment_id   = (int) $plan->id;
+            $resolved_package_id   = (int) ( $plan->package_id ?? 0 );
+            $resolved_package_name = ! empty( $plan->package_name ) ? $plan->package_name : '';
+            if ( ! $resolved_package_name && $resolved_package_id ) {
+                $pkg = ES_Packages::get( $resolved_package_id );
+                $resolved_package_name = $pkg ? $pkg->package_name : '';
+            }
+            $resolved_course_id   = (int) ( $plan->course_id ?? 0 );
+            $resolved_course_name = ! empty( $plan->course_name ) ? $plan->course_name : '';
+            if ( ! $resolved_course_id ) {
+                $resolved_course_id = ES_Packages::first_course_id( ES_Packages::get_student_course_ids( $student_id ) );
+            }
+            if ( ! $resolved_course_name && $resolved_course_id ) {
+                $resolved_course_name = ES_Packages::course_name( $resolved_course_id );
+            }
+        } else {
+            $common_group_ids = null;
+            foreach ( $user_ids as $uid ) {
+                $user_group_ids = array_map( 'intval', wp_list_pluck( ES_Packages::get_user_groups( $uid ), 'id' ) );
+                if ( $common_group_ids === null ) {
+                    $common_group_ids = $user_group_ids;
+                } else {
+                    $common_group_ids = array_values( array_intersect( $common_group_ids, $user_group_ids ) );
+                }
+            }
+
+            if ( empty( $common_group_ids ) ) {
+                wp_send_json_error( array( 'message' => 'Selected users do not share a group. Please use the Group detail page or choose users from the same group.' ) );
+            }
+
+            foreach ( $common_group_ids as $candidate_gid ) {
+                $candidate_payments = ES_Packages::get_group_payments( (int) $candidate_gid, true );
+                foreach ( (array) $candidate_payments as $pay ) {
+                    $left  = max( 0, (int) ( $pay->total_sessions ?? 0 ) - (int) ( $pay->used_sessions ?? 0 ) );
+                    $valid = empty( $pay->valid_until ) || strtotime( $pay->valid_until ) >= current_time( 'timestamp' );
+                    if ( $left > 0 && $valid ) {
+                        $resolved_group_id     = (int) $candidate_gid;
+                        $resolved_payment_id   = (int) $pay->id;
+                        $resolved_package_id   = (int) ( $pay->package_id ?? 0 );
+                        $resolved_package_name = ! empty( $pay->package_name ) ? $pay->package_name : '';
+                        $resolved_course_id    = (int) ( $pay->course_id ?? 0 );
+                        $resolved_course_name  = ! empty( $pay->course_name ) ? $pay->course_name : '';
+                        break 2;
+                    }
+                }
+            }
+
+            if ( ! $resolved_group_id ) {
+                wp_send_json_error( array( 'message' => 'No active shared group package was found for the selected users.' ) );
+            }
+
+            if ( ! $resolved_package_name && $resolved_package_id ) {
+                $pkg = ES_Packages::get( $resolved_package_id );
+                $resolved_package_name = $pkg ? $pkg->package_name : '';
+            }
+            if ( ! $resolved_course_name && $resolved_course_id ) {
+                $resolved_course_name = ES_Packages::course_name( $resolved_course_id );
+            }
+        }
+
+        if ( $resolved_package_id ) {
+            $data['package_id'] = $resolved_package_id;
+        }
+        if ( $resolved_package_name !== '' ) {
+            $data['package_name'] = $resolved_package_name;
+        }
+        if ( $resolved_course_id ) {
+            $data['course_id'] = $resolved_course_id;
+        }
+        if ( $resolved_course_name !== '' ) {
+            $data['course_name'] = $resolved_course_name;
+        }
+        if ( $type === 'group' && $resolved_group_id ) {
+            $data['group_id'] = $resolved_group_id;
+        }
+
         // 1. Create slot
         $slot_id = ES_DB::insert_slot( $data );
         if ( ! $slot_id ) wp_send_json_error( array( 'message' => 'Could not create slot.' ) );
@@ -534,6 +631,7 @@ class ES_Admin_Ajax {
                 'user_id'   => (int) $u->ID,
                 'status'    => 'confirmed',
                 'user_note' => $note,
+                'payment_id' => $resolved_payment_id ?: null,
             );
 
             if ( $zoom_active ) {
@@ -570,6 +668,14 @@ class ES_Admin_Ajax {
             // Rollback: delete the slot we just created since no booking succeeded
             ES_DB::delete_slot( (int) $slot_id );
             wp_send_json_error( array( 'message' => 'Could not create any bookings. ' . implode( ' / ', $errors ) ) );
+        }
+
+        if ( $type === '1to1' ) {
+            foreach ( $user_ids as $uid ) {
+                ES_Packages::recount_used_sessions( (int) $uid );
+            }
+        } elseif ( $resolved_group_id ) {
+            ES_Packages::recount_group_used_sessions( (int) $resolved_group_id );
         }
 
         $msg = sprintf( 'Meeting created with %d user(s).', count( $created ) );
@@ -836,6 +942,7 @@ class ES_Admin_Ajax {
 
     public function after_call_convert() {
         $this->check();
+        global $wpdb;
 
         $user_id  = isset( $_POST['user_id'] ) ? (int) $_POST['user_id'] : 0;
         $outcome  = isset( $_POST['outcome'] ) ? sanitize_text_field( wp_unslash( $_POST['outcome'] ) ) : '';
@@ -902,8 +1009,8 @@ class ES_Admin_Ajax {
             ES_Packages::set_student_course_ids( $user_id, $course_ids_in );
         }
 
+        $course_name = '';
         if ( ! empty( $course_ids_in ) && $primary_pkg_id ) {
-            global $wpdb;
             $course_id   = ES_Packages::first_course_id( $course_ids_in );
             $course_name = ES_Packages::course_names_str( $course_ids_in );
             if ( $course_id ) {
@@ -922,6 +1029,81 @@ class ES_Admin_Ajax {
             ES_Packages::set_staged_flow( $user_id, $flow_type );
         } else {
             ES_Packages::clear_staged_packages( $user_id );
+        }
+
+        // Create fresh "unpaid / in progress" placeholder payments as soon as
+        // After Call assigns packages, so the Payments tab reflects the admin
+        // action even before the student completes the purchase step.
+        if ( $needs_package ) {
+            $payments_table = $wpdb->prefix . 'es_payments';
+            $group_match    = $flow_type === 'group' && $group_id ? $group_id : 0;
+
+            $wpdb->query( $wpdb->prepare(
+                "DELETE FROM {$payments_table}
+                  WHERE user_id = %d
+                    AND status = 'pending'
+                    AND gateway = 'manual'
+                    AND payment_method = 'after_call_assign'
+                    AND flow_type = %s
+                    AND COALESCE(group_id, 0) = %d",
+                $user_id,
+                $flow_type,
+                $group_match
+            ) );
+
+            foreach ( $package_ids as $pending_pkg_id ) {
+                $pending_pkg = ES_Packages::get( $pending_pkg_id );
+                if ( ! $pending_pkg ) continue;
+
+                $pending_months       = max( 1, (int) ( $pending_pkg->months ?? 1 ) );
+                $pending_monthly      = max( 0, (int) ( $pending_pkg->monthly_session_limit ?? 0 ) );
+                $pending_total        = (int) ( $pending_pkg->total_sessions ?? 0 );
+                if ( $pending_total <= 0 && $pending_monthly > 0 ) {
+                    $pending_total = $pending_monthly * $pending_months;
+                }
+
+                $pending_course_id    = ES_Packages::first_course_id( $course_ids_in );
+                $pending_course_name  = $course_name;
+                if ( $flow_type === 'group' && $group_id ) {
+                    if ( ! $pending_course_id ) {
+                        $pending_course_id = ES_Packages::first_course_id( ES_Packages::get_group_course_ids( $group_id ) );
+                    }
+                    if ( $pending_course_name === '' ) {
+                        $pending_course_name = ES_Packages::course_names_str( ES_Packages::get_group_course_ids( $group_id ) );
+                    }
+                    if ( $pending_course_name === '' && $group && ! empty( $group->course_name ) ) {
+                        $pending_course_name = $group->course_name;
+                    }
+                }
+
+                $wpdb->insert( $payments_table, array(
+                    'user_id'               => $user_id,
+                    'package_id'            => (int) $pending_pkg_id,
+                    'package_name'          => $pending_pkg->package_name,
+                    'course_id'             => $pending_course_id ?: null,
+                    'course_name'           => $pending_course_name,
+                    'flow_type'             => $flow_type,
+                    'group_id'              => $flow_type === 'group' && $group_id ? $group_id : null,
+                    'amount'                => (float) ( $pending_pkg->price ?? 0 ),
+                    'monthly_price'         => (float) ( $pending_pkg->monthly_price ?? $pending_pkg->price ?? 0 ),
+                    'months'                => $pending_months,
+                    'monthly_session_limit' => $pending_monthly,
+                    'total_sessions'        => $pending_total,
+                    'used_sessions'         => 0,
+                    'currency'              => ! empty( $pending_pkg->currency ) ? $pending_pkg->currency : 'INR',
+                    'billing_cycle'         => 'after_call',
+                    'gateway'               => 'manual',
+                    'payment_method'        => 'after_call_assign',
+                    'gateway_session_id'    => $flow_type . '_after_call_pending_' . $user_id . '_' . $pending_pkg_id . '_' . time(),
+                    'status'                => 'pending',
+                    'meta'                  => wp_json_encode( array(
+                        'source'    => 'after_call_convert',
+                        'outcome'   => $outcome,
+                        'flow_type' => $flow_type,
+                        'group_id'  => $group_id,
+                    ) ),
+                ) );
+            }
         }
 
         $share_link = '';
@@ -1029,38 +1211,82 @@ class ES_Admin_Ajax {
         $sel_months       = max( 1, (int) ( $package->months ?? 1 ) );
         $monthly_sessions = max( 0, (int) ( $package->monthly_session_limit ?? 0 ) );
         $total_sessions   = (int) ( $package->total_sessions ?? 0 );
-        if ( $total_sessions <= 0 && $monthly_sessions > 0 ) $total_sessions = $monthly_sessions * ( $sel_months + 1 );
+        if ( $total_sessions <= 0 && $monthly_sessions > 0 ) $total_sessions = $monthly_sessions * $sel_months;
 
         $valid_from_ts = current_time( 'timestamp' );
         $valid_from    = date( 'Y-m-d H:i:s', $valid_from_ts );
         $valid_until   = date( 'Y-m-d H:i:s', strtotime( '+' . $sel_months . ' months', $valid_from_ts ) );
 
         global $wpdb;
-        $wpdb->insert( $wpdb->prefix . 'es_payments', array(
-            'user_id'               => $user_id,
-            'package_id'            => $package_id,
-            'package_name'          => $package->package_name,
-            'course_id'             => $course_id ?: null,
-            'course_name'           => $course_name,
-            'flow_type'             => $flow_type,
-            'group_id'              => $flow_type === 'group' && $group_id ? $group_id : null,
-            'amount'                => (float) ( $package->price ?? 0 ),
-            'monthly_price'         => (float) ( $package->monthly_price ?? $package->price ?? 0 ),
-            'months'                => $sel_months,
-            'monthly_session_limit' => $monthly_sessions,
-            'total_sessions'        => $total_sessions,
-            'used_sessions'         => 0,
-            'currency'              => ! empty( $package->currency ) ? $package->currency : 'INR',
-            'billing_cycle'         => 'after_call',
-            'gateway'               => 'manual',
-            'payment_method'        => 'student_selection',
-            'gateway_session_id'    => $flow_type . '_after_call_' . $user_id . '_' . $package_id . '_' . time(),
-            'status'                => 'paid',
-            'valid_from'            => $valid_from,
-            'valid_until'           => $valid_until,
-            'meta'                  => wp_json_encode( array( 'source' => 'student_select_package', 'outcome' => $outcome_label, 'flow_type' => $flow_type, 'group_id' => $group_id ) ),
+        $payments_table = $wpdb->prefix . 'es_payments';
+        $pending_payment = $wpdb->get_row( $wpdb->prepare(
+            "SELECT * FROM {$payments_table}
+              WHERE user_id = %d
+                AND package_id = %d
+                AND status = 'pending'
+                AND gateway = 'manual'
+                AND payment_method = 'after_call_assign'
+                AND flow_type = %s
+                AND COALESCE(group_id, 0) = %d
+              ORDER BY id DESC
+              LIMIT 1",
+            $user_id,
+            $package_id,
+            $flow_type,
+            $flow_type === 'group' && $group_id ? $group_id : 0
         ) );
-        $new_payment_id = (int) $wpdb->insert_id;
+
+        if ( $pending_payment ) {
+            $wpdb->update( $payments_table, array(
+                'package_name'          => $package->package_name,
+                'course_id'             => $course_id ?: null,
+                'course_name'           => $course_name,
+                'flow_type'             => $flow_type,
+                'group_id'              => $flow_type === 'group' && $group_id ? $group_id : null,
+                'amount'                => (float) ( $package->price ?? 0 ),
+                'monthly_price'         => (float) ( $package->monthly_price ?? $package->price ?? 0 ),
+                'months'                => $sel_months,
+                'monthly_session_limit' => $monthly_sessions,
+                'total_sessions'        => $total_sessions,
+                'used_sessions'         => 0,
+                'currency'              => ! empty( $package->currency ) ? $package->currency : 'INR',
+                'billing_cycle'         => 'after_call',
+                'gateway'               => 'manual',
+                'payment_method'        => 'student_selection',
+                'gateway_session_id'    => $flow_type . '_after_call_' . $user_id . '_' . $package_id . '_' . time(),
+                'status'                => 'paid',
+                'valid_from'            => $valid_from,
+                'valid_until'           => $valid_until,
+                'meta'                  => wp_json_encode( array( 'source' => 'student_select_package', 'outcome' => $outcome_label, 'flow_type' => $flow_type, 'group_id' => $group_id ) ),
+            ), array( 'id' => (int) $pending_payment->id ) );
+            $new_payment_id = (int) $pending_payment->id;
+        } else {
+            $wpdb->insert( $payments_table, array(
+                'user_id'               => $user_id,
+                'package_id'            => $package_id,
+                'package_name'          => $package->package_name,
+                'course_id'             => $course_id ?: null,
+                'course_name'           => $course_name,
+                'flow_type'             => $flow_type,
+                'group_id'              => $flow_type === 'group' && $group_id ? $group_id : null,
+                'amount'                => (float) ( $package->price ?? 0 ),
+                'monthly_price'         => (float) ( $package->monthly_price ?? $package->price ?? 0 ),
+                'months'                => $sel_months,
+                'monthly_session_limit' => $monthly_sessions,
+                'total_sessions'        => $total_sessions,
+                'used_sessions'         => 0,
+                'currency'              => ! empty( $package->currency ) ? $package->currency : 'INR',
+                'billing_cycle'         => 'after_call',
+                'gateway'               => 'manual',
+                'payment_method'        => 'student_selection',
+                'gateway_session_id'    => $flow_type . '_after_call_' . $user_id . '_' . $package_id . '_' . time(),
+                'status'                => 'paid',
+                'valid_from'            => $valid_from,
+                'valid_until'           => $valid_until,
+                'meta'                  => wp_json_encode( array( 'source' => 'student_select_package', 'outcome' => $outcome_label, 'flow_type' => $flow_type, 'group_id' => $group_id ) ),
+            ) );
+            $new_payment_id = (int) $wpdb->insert_id;
+        }
 
         if ( $flow_type === 'group' && $group_id ) {
             ES_Packages::add_user_to_group( $group_id, $user_id );
@@ -1073,8 +1299,8 @@ class ES_Admin_Ajax {
             if ( $group && empty( $group->course_id ) && $course_id ) $group_update['course_ids'] = implode( ',', array( $course_id ) );
             if ( ! empty( $group_update ) ) ES_Packages::update_group( $group_id, $group_update );
         } else {
-            update_user_meta( $user_id, ES_Packages::META_HAS_1TO1, 1 );
-            update_user_meta( $user_id, ES_Packages::META_PACKAGE_ID, $package_id );
+            delete_user_meta( $user_id, ES_Packages::META_HAS_1TO1 );
+            delete_user_meta( $user_id, ES_Packages::META_PACKAGE_ID );
         }
 
         ES_Packages::clear_token( $user_id );

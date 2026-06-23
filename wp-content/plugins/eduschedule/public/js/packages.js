@@ -1569,18 +1569,12 @@
 
         if (outcome === 'Group Student') {
             $('#es-group-field').slideDown(150);
-            $('#es-group-package-note').slideUp(150);
-            // Show package field with ONLY group packages
-            $('#es-package-field').slideDown(150);
+            $('#es-group-package-note').slideDown(150);
+            $('#es-package-field').slideUp(150);
             $('#es-course-after-call-field').slideDown(150);
             $('.es-pkg-check-row').each(function () {
-                var pkgType = $(this).data('pkg-type');
-                if (pkgType === 'group') {
-                    $(this).show();
-                } else {
-                    $(this).hide();
-                    $(this).find('.es-pkg-check').prop('checked', false);
-                }
+                $(this).hide();
+                $(this).find('.es-pkg-check').prop('checked', false);
             });
         } else {
             $('#es-group-field').slideUp(150);
@@ -1626,8 +1620,7 @@
 
         if (!outcome) { alert('Please select an outcome'); return; }
 
-        var needsPkg = (outcome === '1:1 Student' || outcome === 'Group Student');
-        if (needsPkg && packageIds.length === 0) {
+        if (outcome === '1:1 Student' && packageIds.length === 0) {
             alert('Please select at least one package');
             return;
         }

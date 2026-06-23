@@ -51,9 +51,6 @@ $sd_plan = ES_Packages::get_active_plan( $student['id'] );
 $sd_pkg  = null;
 if ( $sd_plan ) {
     $sd_pkg = ES_Packages::get( $sd_plan->package_id );
-} else {
-    $assigned_pkg_id = (int) get_user_meta( $student['id'], ES_Packages::META_PACKAGE_ID, true );
-    if ( $assigned_pkg_id ) $sd_pkg = ES_Packages::get( $assigned_pkg_id );
 }
 $sd_total = $sd_plan ? (int) ( $sd_plan->total_sessions ?? 0 ) : ( $sd_pkg ? (int) ( $sd_pkg->total_sessions ?? 0 ) : 0 );
 $sd_used  = $sd_plan ? (int) ( $sd_plan->used_sessions ?? 0 )  : 0;
@@ -199,10 +196,16 @@ if ( class_exists( 'GFAPI' ) ) {
 
                 <div class="es-section-label">Contact & Details</div>
                 <div class="es-card" style="padding:16px 18px;margin-bottom:18px;">
+                    <?php $detail_parent = ! empty( $student['parent_name'] ) ? $student['parent_name'] : ( $gf_data['Parent Name'] ?? '' ); ?>
+                    <?php $detail_source = ! empty( $student['reference'] ) ? ucfirst( $student['reference'] ) : ( $gf_data['Source'] ?? '' ); ?>
+                    <?php $detail_goal   = $gf_data['What is your primary goal for your scholar today?'] ?? ''; ?>
+                    <?php $detail_level  = $gf_data["What is the student's current academic level?"] ?? ''; ?>
                     <div class="es-detail-row"><span>Email</span><div style="text-align:right;"><a href="mailto:<?php echo esc_attr( $student['email'] ); ?>"><?php echo esc_html( $student['email'] ); ?></a></div></div>
                     <div class="es-detail-row"><span>Phone</span><div style="text-align:right;"><?php echo ! empty( $student['phone'] ) ? esc_html( $student['phone'] ) : '<span style="color:#9ca3af;">—</span>'; ?></div></div>
-                    <?php if ( ! empty( $student['parent_name'] ) ) : ?><div class="es-detail-row"><span>Parent</span><div style="text-align:right;"><?php echo esc_html( $student['parent_name'] ); ?></div></div><?php endif; ?>
-                    <?php if ( ! empty( $student['reference'] ) ) : ?><div class="es-detail-row"><span>Reference</span><div style="text-align:right;"><?php echo esc_html( ucfirst( $student['reference'] ) ); ?></div></div><?php endif; ?>
+                    <?php if ( $detail_parent !== '' ) : ?><div class="es-detail-row"><span>Parent</span><div style="text-align:right;"><?php echo esc_html( $detail_parent ); ?></div></div><?php endif; ?>
+                    <?php if ( $detail_source !== '' ) : ?><div class="es-detail-row"><span>Source</span><div style="text-align:right;"><?php echo esc_html( $detail_source ); ?></div></div><?php endif; ?>
+                    <?php if ( $detail_goal !== '' ) : ?><div class="es-detail-row"><span>Goal</span><div style="text-align:right;"><?php echo esc_html( $detail_goal ); ?></div></div><?php endif; ?>
+                    <?php if ( $detail_level !== '' ) : ?><div class="es-detail-row"><span>Level / Band</span><div style="text-align:right;"><?php echo esc_html( $detail_level ); ?></div></div><?php endif; ?>
                     <?php if ( ! empty( $student['comment'] ) ) : ?><div class="es-detail-row"><span>Comment</span><div style="text-align:right;"><?php echo esc_html( $student['comment'] ); ?></div></div><?php endif; ?>
                     <?php if ( ! empty( $student['country'] ) ) : ?><div class="es-detail-row"><span>Country</span><div style="text-align:right;"><?php echo esc_html( $student['country'] ); ?></div></div><?php endif; ?>
                     <?php if ( ! empty( $student['timezone'] ) ) : ?><div class="es-detail-row"><span>Timezone</span><div style="text-align:right;"><?php echo esc_html( $student['timezone'] ); ?></div></div><?php endif; ?>
@@ -420,7 +423,7 @@ if ( class_exists( 'GFAPI' ) ) {
                         $status_class = $is_active ? 'es-pill-success' : 'es-pill-info';
                         $status_text  = $is_active ? 'ACTIVE' : 'EXPIRED';
                     } elseif ( $pay_status === 'pending' ) {
-                        $status_class = 'es-pill-warning'; $status_text = 'PENDING';
+                        $status_class = 'es-pill-warning'; $status_text = 'UNPAID';
                     } else {
                         $status_class = 'es-pill-danger'; $status_text = strtoupper( $pay_status ?: 'FAILED' );
                     }

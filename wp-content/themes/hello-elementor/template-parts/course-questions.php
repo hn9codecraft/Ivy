@@ -1,7 +1,37 @@
 <?php
+
 /*
 Template Name: Course Quiz Template
 */
+
+$course_id = isset($_GET['course_id']) ? intval($_GET['course_id']) : 0;
+
+if (is_user_logged_in() && $course_id) {
+
+    $rows = get_field('course_relationship', 'options');
+    $found = false;
+
+    if (!empty($rows) && is_array($rows)) {
+        foreach ($rows as $row) {
+            if (!empty($row['courses']) && !empty($row['shortcode_'])) {
+                foreach ($row['courses'] as $course) {
+
+                    $course_match_id = is_object($course) ? $course->ID : $course;
+
+                    if ($course_match_id == $course_id) {
+                        $found = true;
+                        break 2;
+                    }
+                }
+            }
+        }
+    }
+
+    if (!$found) {
+        wp_redirect(home_url('/book-calendar/'));
+        exit;
+    }
+}
 
 get_header();
 

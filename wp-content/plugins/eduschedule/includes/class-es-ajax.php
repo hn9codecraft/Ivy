@@ -491,6 +491,9 @@ class ES_Ajax {
             'status'    => 'confirmed',
             'user_note' => $note,
         );
+        if ( $slot->slot_type === '1to1' && $plan ) {
+            $data['payment_id'] = (int) $plan->id;
+        }
 
         // Create Zoom meeting if applicable
         if ( ES_Zoom::is_configured() && stripos( $slot->platform, 'zoom' ) !== false ) {

@@ -421,7 +421,7 @@
             selectedDates: [],   // ['2026-04-16', '2026-04-20']
             slotsByDate: {},     // { '2026-04-16': [{id, start_user, end_user, ...}] }
             chosenSlots: {},     // { '2026-04-16': slot_id }
-            form: { first_name: '', last_name: '', email: '', topic: '', platform: 'Zoom' }
+            form: { first_name: '', last_name: '', parent_name: '', email: '', phone: '', topic: '', platform: 'Zoom' }
         }
     };
 
@@ -463,6 +463,7 @@
         if (PCal.config.isLogged) {
             PCal.state.form.first_name = $app.data('user-first') || '';
             PCal.state.form.last_name = $app.data('user-last') || '';
+            PCal.state.form.parent_name = [PCal.state.form.first_name, PCal.state.form.last_name].join(' ').trim();
             PCal.state.form.email = $app.data('user-email') || '';
         }
         PCal.state.form.platform = PCal.config.defaultPlatform;
@@ -783,16 +784,11 @@
         var f = PCal.state.form;
         var html = '<div class="es-pcal-form-wrap">';
         html += '<div class="es-pcal-form-card">';
-
-        html += '<div class="es-pcal-form-row">';
-        html += '<div class="es-pcal-field"><label>First Name</label><input type="text" data-field="first_name" placeholder="ENTER FIRST NAME" value="' + escapeHtml(f.first_name) + '"></div>';
-        html += '<div class="es-pcal-field"><label>Last Name</label><input type="text" data-field="last_name" placeholder="ENTER LAST NAME" value="' + escapeHtml(f.last_name) + '"></div>';
-        html += '</div>';
-
-        html += '<div class="es-pcal-field"><label>Email</label><input type="email" data-field="email" placeholder="EMAIL ADDRESS" value="' + escapeHtml(f.email) + '"></div>';
-
-        html += '<div class="es-pcal-field"><label>What\'s this meeting about?</label>';
-        html += '<textarea data-field="topic" rows="4" placeholder="Brief description of what you\'d like to discuss..">' + escapeHtml(f.topic) + '</textarea></div>';
+        html += '<div class="es-pcal-form-progress-meta">Step 13 of 13</div>';
+        html += '<div class="es-pcal-form-progress"><span></span></div>';
+        html += '<div class="es-pcal-field"><label>Parent Name</label><input type="text" data-field="parent_name" value="' + escapeHtml(f.parent_name || [f.first_name, f.last_name].join(' ').trim()) + '"></div>';
+        html += '<div class="es-pcal-field"><label>Email Address</label><input type="email" data-field="email" value="' + escapeHtml(f.email) + '"></div>';
+        html += '<div class="es-pcal-field"><label>Phone Number</label><input type="text" data-field="phone" value="' + escapeHtml(f.phone || '') + '"></div>';
 
         // Platform is set per-slot by the admin — no need to ask the user.
 
@@ -804,9 +800,9 @@
 
         html += '</div></div>';
 
-        html += '<div class="es-pcal-actions">';
-        html += '<button type="button" class="es-pcal-icon-btn-lg  btn-link" data-act="back-to-slots">' + ICON.arrowL + '</button>';
-        html += '<button type="button" class="btn-primary" data-act="to-step4">Review Booking </button>';
+        html += '<div class="es-pcal-actions es-pcal-actions-form">';
+        html += '<button type="button" class="es-pcal-outline-btn" data-act="back-to-slots">Previous</button>';
+        html += '<button type="button" class="es-pcal-btn-primary" data-act="to-step4">Submit</button>';
         html += '</div>';
 
         PCal.$wrap.html(html);
@@ -815,6 +811,12 @@
     $(document).on('input change', '.es-pcal-app [data-field]', function () {
         var key = $(this).data('field');
         PCal.state.form[key] = $(this).val();
+        if (key === 'parent_name') {
+            var full = $.trim($(this).val());
+            var parts = full ? full.split(/\s+/) : [];
+            PCal.state.form.first_name = parts.length ? parts.shift() : '';
+            PCal.state.form.last_name = parts.join(' ');
+        }
     });
     $(document).on('click', '.es-pcal-app [data-act="back-to-slots"]', function () {
         PCal.state.step = 2;
@@ -825,7 +827,7 @@
     });
     $(document).on('click', '.es-pcal-app [data-act="to-step4"]', function () {
         var f = PCal.state.form;
-        if (!f.first_name || !f.last_name) { toast('Please enter your name.', 'danger'); return; }
+        if (!$.trim(f.parent_name || '')) { toast('Please enter parent name.', 'danger'); return; }
         if (!/^\S+@\S+\.\S+$/.test(f.email)) { toast('Please enter a valid email.', 'danger'); return; }
         PCal.state.step = 4;
         pcalRender();
@@ -837,8 +839,9 @@
         var html = '<div class="es-pcal-confirm-wrap">';
         html += '<div class="es-pcal-confirm-card">';
 
-        html += pcalConfirmRow('Name', escapeHtml(f.first_name + ' ' + f.last_name));
-        html += pcalConfirmRow('Email', escapeHtml(f.email));
+        html += pcalConfirmRow('Parent Name', escapeHtml(f.parent_name || [f.first_name, f.last_name].join(' ').trim()));
+        html += pcalConfirmRow('Email Address', escapeHtml(f.email));
+        if (f.phone) html += pcalConfirmRow('Phone Number', escapeHtml(f.phone));
 
         if (PCal.state.selectedDates.length === 1) {
             var date = PCal.state.selectedDates[0];
@@ -862,8 +865,6 @@
                 html += pcalConfirmRow(i === 0 ? 'Sessions' : '', line);
             });
         }
-
-        if (f.topic) html += pcalConfirmRow('Topic', escapeHtml(f.topic));
 
         html += '</div></div>';
 
@@ -966,7 +967,7 @@
         html += '<div class="es-pcal-success-icon">' + ICON.check + '</div>';
 
         if (allOk) {
-            html += '<h3>You are all set, ' + escapeHtml(f.first_name) + '!</h3>';
+            html += '<h3>You are all set, ' + escapeHtml(f.parent_name || f.first_name || 'there') + '!</h3>';
             html += '<p>Your booking has been confirmed. A confirmation email is on its way.</p>';
         } else {
             var okCount = results.filter(function (r) { return r.ok; }).length;

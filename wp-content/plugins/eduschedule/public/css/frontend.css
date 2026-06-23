@@ -984,25 +984,50 @@
     background: var(--es-bg-card);
     border: 1px solid var(--es-border);
     border-radius: 14px;
-    padding: 26px 28px;
+    padding: 28px 48px 36px;
 }
-.es-pcal-form-row {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 14px;
+.es-pcal-form-progress-meta {
+    color: var(--es-text-muted);
+    font-size: 13px;
+    font-weight: 600;
+    margin-bottom: 12px;
 }
-@media (max-width: 540px) {
-    .es-pcal-form-row { grid-template-columns: 1fr; }
+.es-pcal-form-progress {
+    height: 8px;
+    background: rgba(255,255,255,0.06);
+    border-radius: 999px;
+    overflow: hidden;
+    margin-bottom: 24px;
+}
+.es-pcal-form-progress span {
+    display: block;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, #ff356d 0%, #f21f5b 100%);
+    border-radius: inherit;
 }
 .es-pcal-field {
-    margin-bottom: 16px;
+    margin-bottom: 28px;
 }
 .es-pcal-field label {
     display: block;
     color: var(--es-text);
-    font-size: 13px;
-    font-weight: 500;
-    margin-bottom: 6px;
+    font-size: 16px;
+    font-weight: 700;
+    margin-bottom: 14px;
+}
+.es-pcal-field input,
+.es-pcal-field textarea,
+.es-pcal-field select {
+    width: 100%;
+    min-height: 46px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid var(--es-border);
+    border-radius: 12px;
+    color: var(--es-text);
+    padding: 14px 18px;
+    font-size: 15px;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
 
 .es-pcal-field input::placeholder,
@@ -1079,8 +1104,29 @@
     gap: 10px;
     margin-top: 6px;
 }
+.es-pcal-actions-form {
+    max-width: 572px;
+    margin: 18px auto 0;
+}
 .es-pcal-actions:has(> :only-child) {
     justify-content: flex-end;
+}
+.es-pcal-outline-btn {
+    min-width: 118px;
+    height: 48px;
+    border-radius: 12px;
+    border: 1px solid var(--es-border);
+    background: transparent;
+    color: var(--es-text-muted);
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.15s ease;
+}
+.es-pcal-outline-btn:hover {
+    border-color: var(--es-pink);
+    color: var(--es-text);
+    background: rgba(255,255,255,0.03);
 }
 .es-pcal-btn-primary {
     background: var(--es-pink);
@@ -1110,6 +1156,20 @@
 .es-pcal-btn-primary svg {
     width: 16px;
     height: 16px;
+}
+@media (max-width: 640px) {
+    .es-pcal-form-card {
+        padding: 22px 18px 28px;
+    }
+    .es-pcal-actions-form {
+        max-width: none;
+        flex-direction: column-reverse;
+        align-items: stretch;
+    }
+    .es-pcal-outline-btn,
+    .es-pcal-btn-primary {
+        width: 100%;
+    }
 }
 
 /* ============= SUCCESS ============= */

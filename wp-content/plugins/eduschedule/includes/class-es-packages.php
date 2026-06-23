@@ -691,23 +691,19 @@ class ES_Packages {
         // v4.5.8: keep 1:1 and Group workflows independent. A student can
         // keep their 1:1 data while also joining a group, and vice versa.
         if ( $category === '1to1' ) {
-            update_user_meta( $user_id, self::META_HAS_1TO1, 1 );
             $current = self::get_user_category( $user_id );
             if ( ! in_array( $current, array( 'group', 'lost' ), true ) ) {
                 update_user_meta( $user_id, self::META_CATEGORY, '1to1' );
             }
-            if ( $package_id > 0 ) {
-                update_user_meta( $user_id, self::META_PACKAGE_ID, (int) $package_id );
-            }
+            delete_user_meta( $user_id, self::META_HAS_1TO1 );
+            delete_user_meta( $user_id, self::META_PACKAGE_ID );
         } elseif ( $category === 'group' ) {
-            update_user_meta( $user_id, self::META_HAS_GROUP, 1 );
             $current = self::get_user_category( $user_id );
             if ( ! self::user_has_flow( $user_id, '1to1' ) && ! in_array( $current, array( '1to1', 'lost' ), true ) ) {
                 update_user_meta( $user_id, self::META_CATEGORY, 'group' );
             }
             if ( $group_id ) {
                 update_user_meta( $user_id, self::META_GROUP_ID, (int) $group_id );
-                self::add_user_to_group( $group_id, $user_id );
             }
         } else {
             update_user_meta( $user_id, self::META_CATEGORY, $category );
@@ -737,11 +733,12 @@ class ES_Packages {
 
     public static function user_has_flow( $user_id, $flow_type ) {
         $flow_type = $flow_type === 'group' ? 'group' : '1to1';
-        $cat = self::get_user_category( $user_id );
         if ( $flow_type === '1to1' ) {
-            return $cat === '1to1' || (bool) get_user_meta( $user_id, self::META_HAS_1TO1, true );
+            $payments = self::get_user_payments( $user_id, true, '1to1' );
+            return ! empty( $payments );
         }
-        return $cat === 'group' || (bool) get_user_meta( $user_id, self::META_HAS_GROUP, true ) || ! empty( self::get_user_groups( $user_id ) );
+        $payments = self::get_user_payments( $user_id, true, 'group' );
+        return ! empty( $payments ) || ! empty( self::get_user_groups( $user_id ) );
     }
 
     public static function get_lead_packages( $user_id ) {
@@ -802,29 +799,44 @@ class ES_Packages {
         }
 
         if ( $category === '1to1' ) {
-            return get_users( array(
-                'orderby'  => 'registered',
-                'order'    => 'DESC',
-                'number'   => $limit,
-                'meta_query' => array(
-                    'relation' => 'OR',
-                    array( 'key' => self::META_CATEGORY,  'value' => '1to1', 'compare' => '=' ),
-                    array( 'key' => self::META_HAS_1TO1, 'value' => '1',    'compare' => '=' ),
-                ),
+            global $wpdb;
+            $pay = $wpdb->prefix . 'es_payments';
+            $ids = $wpdb->get_col( $wpdb->prepare(
+                "SELECT user_id
+                   FROM {$pay}
+                  WHERE status = 'paid'
+                    AND (flow_type IS NULL OR flow_type = '' OR flow_type = '1to1')
+                    AND (group_id IS NULL OR group_id = 0)
+               GROUP BY user_id
+               ORDER BY MAX(created_at) DESC
+                  LIMIT %d",
+                (int) $limit
             ) );
+            return $ids ? get_users( array( 'include' => array_map( 'intval', $ids ), 'orderby' => 'registered', 'order' => 'DESC', 'number' => $limit ) ) : array();
         }
 
         if ( $category === 'group' ) {
-            return get_users( array(
-                'orderby'  => 'registered',
-                'order'    => 'DESC',
-                'number'   => $limit,
-                'meta_query' => array(
-                    'relation' => 'OR',
-                    array( 'key' => self::META_CATEGORY,   'value' => 'group', 'compare' => '=' ),
-                    array( 'key' => self::META_HAS_GROUP, 'value' => '1',     'compare' => '=' ),
-                ),
+            global $wpdb;
+            $pay = $wpdb->prefix . 'es_payments';
+            $gm  = $wpdb->prefix . 'es_group_members';
+            $ids = $wpdb->get_col( $wpdb->prepare(
+                "SELECT user_id
+                   FROM (
+                        SELECT p.user_id AS user_id, MAX(p.created_at) AS latest_at
+                          FROM {$pay} p
+                         WHERE p.status = 'paid'
+                           AND (p.flow_type = 'group' OR (p.group_id IS NOT NULL AND p.group_id > 0))
+                         GROUP BY p.user_id
+                        UNION
+                        SELECT gm.user_id AS user_id, CURRENT_TIMESTAMP AS latest_at
+                          FROM {$gm} gm
+                    ) grouped_users
+               GROUP BY user_id
+               ORDER BY MAX(latest_at) DESC
+                  LIMIT %d",
+                (int) $limit
             ) );
+            return $ids ? get_users( array( 'include' => array_map( 'intval', $ids ), 'orderby' => 'registered', 'order' => 'DESC', 'number' => $limit ) ) : array();
         }
 
         return get_users( array(
@@ -1429,6 +1441,8 @@ class ES_Packages {
               WHERE bk.user_id = %d
                 AND bk.status != 'cancelled'
                 AND sl.slot_type = '1to1'
+                AND bk.payment_id IS NOT NULL
+                AND bk.payment_id > 0
               ORDER BY sl.slot_date DESC, sl.start_time DESC
               LIMIT %d",
             (int) $user_id, (int) $limit
@@ -1464,6 +1478,8 @@ class ES_Packages {
               WHERE bk.user_id = %d
                 AND bk.status != 'cancelled'
                 AND sl.slot_type = '1to1'
+                AND bk.payment_id IS NOT NULL
+                AND bk.payment_id > 0
               ORDER BY sl.slot_date DESC, sl.start_time DESC
               LIMIT %d",
             (int) $user_id, (int) $limit
