@@ -5,11 +5,11 @@
             <h1>All Bookings</h1>
             <p class="es-page-sub">All bookings made by users.</p>
         </div>
-        <div class="es-page-actions">
+        <!-- <div class="es-page-actions">
             <button type="button" class="es-btn es-btn-primary" id="es-manual-book-btn">
                 <span class="dashicons dashicons-plus"></span> Manual Book
             </button>
-        </div>
+        </div> -->
     </div>
 
     <?php if ( ! empty( $_GET['deleted'] ) ) : ?>

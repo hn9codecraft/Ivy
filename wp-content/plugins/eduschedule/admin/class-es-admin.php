@@ -19,19 +19,19 @@ class ES_Admin {
         $cap = ES_Helpers::admin_capability();
 
         add_menu_page(
-            'EduSchedule', 'EduSchedule', $cap, 'eduschedule',
+            'EduSchedule', 'Edu. Schedule', $cap, 'eduschedule',
             array( $this, 'page_calendar' ),
             'dashicons-calendar-alt', 26
         );
         add_submenu_page( 'eduschedule', 'Calendar',         'Calendar',         $cap, 'eduschedule',           array( $this, 'page_calendar' ) );
         add_submenu_page( 'eduschedule', 'My Slots',         'My Slots',         $cap, 'eduschedule-slots',     array( $this, 'page_slots' ) );
         add_submenu_page( 'eduschedule', 'All Bookings',     'All Bookings',     $cap, 'eduschedule-bookings',  array( $this, 'page_bookings' ) );
-        add_submenu_page( 'eduschedule', 'Payments',         'Payments',         $cap, 'eduschedule-payments',  array( $this, 'page_payments' ) );
-        add_submenu_page( 'eduschedule', 'Students',         'Students',         $cap, 'eduschedule-students',  array( $this, 'page_students' ) );
-        //add_submenu_page( 'eduschedule', 'Demo Leads',       'Demo Leads',       $cap, 'eduschedule-demo-leads', array( $this, 'page_demo_leads' ) );
-        add_submenu_page( 'eduschedule', '1:1 Students',     '1:1 Students',     $cap, 'eduschedule-1to1',      array( $this, 'page_one_to_one' ) );
-        add_submenu_page( 'eduschedule', 'Groups',           'Groups',           $cap, 'eduschedule-groups',    array( $this, 'page_groups' ) );
+        add_submenu_page( 'eduschedule', 'Users',         'Users',         $cap, 'eduschedule-students',  array( $this, 'page_students' ) );
         add_submenu_page( 'eduschedule', 'Packages',         'Packages',         $cap, 'eduschedule-packages',  array( $this, 'page_packages' ) );
+        add_submenu_page( 'eduschedule', '1:1 Students',     '1:1 Students',     $cap, 'eduschedule-1to1',      array( $this, 'page_one_to_one' ) );
+        add_submenu_page( 'eduschedule', 'Groups',           'Groups Students',           $cap, 'eduschedule-groups',    array( $this, 'page_groups' ) );
+        add_submenu_page( 'eduschedule', 'Payments',         'Payments',         $cap, 'eduschedule-payments',  array( $this, 'page_payments' ) );
+        //add_submenu_page( 'eduschedule', 'Demo Leads',       'Demo Leads',       $cap, 'eduschedule-demo-leads', array( $this, 'page_demo_leads' ) );
         add_submenu_page( 'eduschedule', 'Zoom Integration', 'Zoom Integration', $cap, 'eduschedule-zoom',      array( $this, 'page_zoom' ) );
         add_submenu_page( 'eduschedule', 'Settings',         'Settings',         $cap, 'eduschedule-settings',  array( $this, 'page_settings' ) );
     }
