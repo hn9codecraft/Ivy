@@ -61,6 +61,28 @@ $sd_dur   = $sd_plan ? (int) ( $sd_plan->months ?? 1 ) : ( $sd_pkg ? (int) ( $sd
 // Payments (paid + pending) for the Payments tab
 $sd_payments = ES_Packages::get_user_payments( $student['id'], false );
 $sd_now      = current_time( 'timestamp' );
+if ( ! empty( $sd_payments ) ) {
+    $sd_active_paid_packages = array();
+    foreach ( $sd_payments as $sd_pay_row ) {
+        $sd_pay_status = strtolower( (string) ( $sd_pay_row->status ?? '' ) );
+        $sd_pkg_id     = (int) ( $sd_pay_row->package_id ?? 0 );
+        $sd_valid_ts   = ! empty( $sd_pay_row->valid_until ) ? strtotime( $sd_pay_row->valid_until ) : false;
+        $sd_is_active  = ( $sd_pay_status === 'paid' ) && ( empty( $sd_pay_row->valid_until ) || $sd_valid_ts >= $sd_now );
+        if ( $sd_is_active && $sd_pkg_id > 0 ) {
+            $sd_active_paid_packages[ $sd_pkg_id ] = true;
+        }
+    }
+    if ( ! empty( $sd_active_paid_packages ) ) {
+        $sd_payments = array_values( array_filter( $sd_payments, function ( $sd_pay_row ) use ( $sd_active_paid_packages ) {
+            $sd_pay_status = strtolower( (string) ( $sd_pay_row->status ?? '' ) );
+            $sd_pkg_id     = (int) ( $sd_pay_row->package_id ?? 0 );
+            if ( $sd_pay_status !== 'pending' ) {
+                return true;
+            }
+            return $sd_pkg_id < 1 || empty( $sd_active_paid_packages[ $sd_pkg_id ] );
+        } ) );
+    }
+}
 
 // Additional comments per package — sourced from the admin's After-Call records
 // (es_lead_packages.additional_comments). Keyed by package_id so each purchase
