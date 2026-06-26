@@ -412,25 +412,6 @@ if ( class_exists( 'GFAPI' ) ) {
                     <?php endif; ?>
                 </div>
 
-                <?php if ( $sd_pkg ) : ?>
-                    <div class="es-card es-package-detail-card" style="padding:18px 20px;margin-bottom:14px;">
-                        <div class="es-section-label">Selected Package Details</div>
-                        <div class="es-package-detail-grid">
-                            <div><span>Package</span><strong><?php echo esc_html( $sd_pkg->package_name ); ?></strong></div>
-                            <?php if ( ! empty( $sd_pkg->sub_heading ) ) : ?><div><span>Sub Heading</span><strong><?php echo esc_html( $sd_pkg->sub_heading ); ?></strong></div><?php endif; ?>
-                            <div><span>Duration</span><strong><?php echo (int) $sd_dur; ?> month<?php echo $sd_dur > 1 ? 's' : ''; ?></strong></div>
-                            <div><span>Monthly Sessions</span><strong><?php echo $sd_plan ? (int) $sd_plan->monthly_session_limit : (int) ( $sd_pkg->monthly_session_limit ?? 0 ); ?></strong></div>
-                            <div><span>Total Sessions</span><strong><?php echo (int) $sd_total; ?></strong></div>
-                            <div><span>Used Sessions</span><strong><?php echo (int) $sd_used; ?></strong></div>
-                            <div><span>Remaining Sessions</span><strong><?php echo (int) $sd_left; ?></strong></div>
-                            <?php if ( $sd_plan && ! empty( $sd_plan->valid_until ) ) : ?><div><span>Valid Until</span><strong><?php echo esc_html( date_i18n( 'M j, Y', strtotime( $sd_plan->valid_until ) ) ); ?></strong></div><?php endif; ?>
-                        </div>
-                        <?php if ( ! empty( $sd_pkg->description ) ) : ?>
-                            <div class="es-package-desc"><?php echo nl2br( esc_html( $sd_pkg->description ) ); ?></div>
-                        <?php endif; ?>
-                    </div>
-                <?php endif; ?>
-
                 <?php if ( empty( $sd_payments ) ) : ?>
                     <p class="es-empty-cell">No payments yet.</p>
                 <?php else : foreach ( $sd_payments as $pay ) :
