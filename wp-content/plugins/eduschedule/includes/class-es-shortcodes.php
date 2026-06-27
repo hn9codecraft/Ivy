@@ -41,7 +41,9 @@ class ES_Shortcodes {
         add_shortcode( 'eduschedule_packages',     array( $this, 'packages' ) );
         add_shortcode( 'course_booking_calendar',  array( $this, 'public_calendar' ) );
         add_shortcode( 'eduschedule_calendar',     array( $this, 'public_calendar' ) );
-        add_shortcode( 'es_course_listing',        array( $this, 'course_listing' ) );
+        // [es_course_listing] now lives in the theme (functions.php +
+        // template-parts/course-listing.php). The course_listing() method below
+        // is kept as a reference but is no longer registered here.
     }
 
     public function enqueue() {
@@ -616,8 +618,17 @@ class ES_Shortcodes {
 
         ob_start();
         ?>
-        <div class="es-course-listing-wrap" id="<?php echo esc_attr( $uid ); ?>">
+        <div class="course-list-heading">
+            <div class="container">
+                <div class="breadcrumb course-breadcrumb">
+                    <a href="/">Home</a> <span class="text-primary"> | </span>
+                    <span>Courses</span>
+                </div>
 
+                <h1>All Certification Preparation Courses</h1>
+            </div>
+        </div>
+        <div class="es-course-listing-wrap container" id="<?php echo esc_attr( $uid ); ?>">
         <?php if ( $show_filter && ! empty( $filter_cats ) ) : ?>
             <aside class="es-cl-sidebar">
                 <div class="es-cl-filter-head">Filter</div>
@@ -642,12 +653,23 @@ class ES_Shortcodes {
 
         <div class="es-course-listing">
             <?php if ( empty( $courses ) ) : ?>
-                <p style="text-align:center;color:#94a3b8;padding:40px 0;">No courses found.</p>
+                <p class="es-cl-empty">No courses found.</p>
             <?php else : foreach ( $courses as $course ) :
                 $cid         = (int) $course->ID;
                 $title       = get_the_title( $course );
                 $permalink   = ! empty( $atts['demo_url'] ) ? esc_url( $atts['demo_url'] ) : get_permalink( $course );
-                $thumb_url   = get_the_post_thumbnail_url( $course, 'medium' );
+
+                // Course image: first ACF image_gallery image, then featured image as fallback.
+                $thumb_url = '';
+                if ( function_exists( 'get_field' ) ) {
+                    $gallery = get_field( 'image_gallery', $cid );
+                    if ( ! empty( $gallery[0]['url'] ) ) {
+                        $thumb_url = $gallery[0]['url'];
+                    }
+                }
+                if ( ! $thumb_url ) {
+                    $thumb_url = get_the_post_thumbnail_url( $course, 'medium' );
+                }
 
                 // ACF fields — safe fallbacks if ACF not active
                 $short_desc  = function_exists( 'get_field' ) ? get_field( 'course_short_description', $cid ) : '';
@@ -733,56 +755,6 @@ class ES_Shortcodes {
         </div><!-- /.es-course-listing -->
         </div><!-- /.es-course-listing-wrap -->
 
-        <style>
-        #<?php echo esc_attr( $uid ); ?>.es-course-listing-wrap{display:flex;align-items:flex-start;gap:28px;max-width:960px;margin:0 auto;font-family:inherit;}
-        .es-cl-sidebar{flex:0 0 180px;width:180px;background:#f8fafc;border:1px solid #e5e7eb;border-radius:10px;padding:14px 0;position:sticky;top:80px;}
-        .es-cl-filter-head{font-size:11px;text-transform:uppercase;letter-spacing:.08em;font-weight:700;color:#64748b;padding:0 14px 10px;border-bottom:1px solid #e5e7eb;margin-bottom:6px;}
-        .es-cl-cat-list{list-style:none;margin:0;padding:0;}
-        .es-cl-cat-item{display:flex;align-items:center;gap:8px;padding:7px 14px;font-size:13px;cursor:pointer;color:#374151;transition:background .12s;border-radius:6px;margin:0 4px;}
-        .es-cl-cat-item:hover{background:#f1f5f9;}
-        .es-cl-cat-item.is-active{background:#ede9fe;color:#6d28d9;font-weight:600;}
-        .es-cl-cat-item input[type="radio"]{display:none;}
-        .es-cl-cat-count{margin-left:auto;font-size:11px;background:#e5e7eb;color:#6b7280;border-radius:999px;padding:1px 7px;font-weight:600;}
-        .es-cl-cat-item.is-active .es-cl-cat-count{background:#ddd6fe;color:#6d28d9;}
-        .es-course-listing{flex:1;min-width:0;}
-        .es-cl-row{display:flex;align-items:flex-start;gap:18px;padding:20px 0;border-bottom:1px solid rgba(0,0,0,.07);}
-        .es-cl-row:last-child{border-bottom:none;}
-        .es-cl-thumb{flex:0 0 200px;width:200px;}
-        .es-cl-thumb img{width:100%;height:130px;object-fit:cover;border-radius:8px;display:block;}
-        .es-cl-thumb-placeholder{width:100%;height:130px;background:#1e293b;border-radius:8px;display:flex;align-items:center;justify-content:center;color:#475569;font-size:32px;}
-        .es-cl-info{flex:1;min-width:0;}
-        .es-cl-title{margin:0 0 6px;font-size:16px;font-weight:700;line-height:1.3;}
-        .es-cl-title a{text-decoration:none;color:inherit;}
-        .es-cl-title a:hover{text-decoration:underline;}
-        .es-cl-desc{margin:0 0 8px;font-size:13px;line-height:1.5;color:#94a3b8;}
-        .es-cl-badges{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;}
-        .es-cl-badge{display:inline-block;padding:3px 8px;border-radius:4px;font-size:11px;font-weight:700;letter-spacing:.02em;background:#334155;color:#94a3b8;}
-        .es-cl-badge-premium{background:#7c3aed;color:#fff;}
-        .es-cl-badge-bestseller{background:#d97706;color:#fff;}
-        .es-cl-badge-new{background:#059669;color:#fff;}
-        .es-cl-creator{font-size:12px;color:#64748b;margin-bottom:6px;}
-        .es-cl-rating{display:flex;align-items:center;gap:6px;}
-        .es-cl-rating-num{font-size:13px;font-weight:700;color:#f59e0b;}
-        .es-cl-stars{display:flex;gap:1px;}
-        .es-cl-star{font-size:14px;color:#f59e0b;}
-        .es-cl-star-empty{color:#475569;}
-        .es-cl-star-half{position:relative;color:#475569;}
-        .es-cl-star-half::before{content:"★";position:absolute;left:0;top:0;width:50%;overflow:hidden;color:#f59e0b;}
-        .es-cl-action{flex:0 0 auto;display:flex;align-items:flex-start;padding-top:4px;}
-        .es-cl-demo-btn{display:inline-block;padding:7px 18px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;font-weight:600;color:inherit;text-decoration:none;transition:border-color .15s,color .15s;}
-        .es-cl-demo-btn:hover{border-color:#8b5cf6;color:#8b5cf6;}
-        @media(max-width:700px){
-            #<?php echo esc_attr( $uid ); ?>.es-course-listing-wrap{flex-direction:column;}
-            .es-cl-sidebar{flex:none;width:100%;position:static;}
-            .es-cl-cat-list{display:flex;flex-wrap:wrap;gap:4px;padding:0 10px;}
-            .es-cl-cat-item{padding:5px 10px;}
-            .es-cl-row{flex-wrap:wrap;}
-            .es-cl-thumb{flex:0 0 100%;width:100%;}
-            .es-cl-thumb img{height:180px;}
-            .es-cl-action{width:100%;}
-            .es-cl-demo-btn{width:100%;text-align:center;}
-        }
-        </style>
         <script>
         (function(){
             var wrap = document.getElementById('<?php echo esc_js( $uid ); ?>');

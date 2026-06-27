@@ -184,8 +184,76 @@ function custom_theme_styles() {
         array(),
         HELLO_ELEMENTOR_VERSION
     );
+
+    wp_enqueue_style(
+        'profile-css',
+        HELLO_THEME_STYLE_URL . 'profile.css',
+        array(),
+        HELLO_ELEMENTOR_VERSION
+    );
+
+    wp_enqueue_style(
+        'sidebar-css',
+        HELLO_THEME_STYLE_URL . 'sidebar.css',
+        array(),
+        HELLO_ELEMENTOR_VERSION
+    );
+
+    wp_enqueue_style(
+        'course-list-css',
+        HELLO_THEME_STYLE_URL . 'course-list.css',
+        array(),
+        HELLO_ELEMENTOR_VERSION
+    );
+
+    // Swiper library (required by custom.js slider)
+    wp_enqueue_style(
+        'swiper-css',
+        'https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.css',
+        array(),
+        '11'
+    );
+
+    wp_enqueue_script(
+        'swiper-js',
+        'https://cdn.jsdelivr.net/npm/swiper@11/swiper-bundle.min.js',
+        array(),
+        '11',
+        true
+    );
+
+    // Theme custom JS (depends on Swiper, loaded in footer)
+    wp_enqueue_script(
+        'custom-javascript',
+        HELLO_THEME_SCRIPTS_URL . 'custom.js',
+        array('swiper-js'),
+        HELLO_ELEMENTOR_VERSION,
+        true
+    );
 }
 add_action('wp_enqueue_scripts', 'custom_theme_styles');
+
+/**
+ * [es_course_listing] — course list page.
+ * Markup lives in template-parts/course-listing.php, styles in
+ * assets/css/course-list.css. Moved here from the eduschedule plugin.
+ */
+function ivy_course_listing_shortcode( $atts = array() ) {
+    $atts = shortcode_atts( array(
+        'title'          => 'All Certification Preparation Courses',
+        'posts_per_page' => -1,
+        'orderby'        => 'menu_order',
+        'order'          => 'ASC',
+        'category'       => '',
+        'demo_label'     => 'Demo',
+        'demo_url'       => '',
+    ), $atts, 'es_course_listing' );
+
+    ob_start();
+    include get_template_directory() . '/template-parts/course-listing.php';
+    return ob_get_clean();
+}
+add_shortcode( 'es_course_listing', 'ivy_course_listing_shortcode' );
 
 if ( ! function_exists( 'hello_elementor_register_elementor_locations' ) ) {
 	/**
