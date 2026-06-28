@@ -324,7 +324,7 @@ if ( class_exists( 'GFAPI' ) ) {
 
                     <div class="es-field" id="es-package-field">
                         <label class="es-label">Package <small style="font-weight:400;color:var(--es-text-muted);">(student will choose from these via link)</small></label>
-                        <div id="es-package-checkboxes" style="display:flex;flex-direction:column;gap:8px;padding:10px;background:var(--es-bg-input);border:1px solid var(--es-border);border-radius:8px;max-height:220px;overflow-y:auto;">
+                        <div id="es-package-checkboxes" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px;padding:10px;background:var(--es-bg-input);border:1px solid var(--es-border);border-radius:8px;max-height:280px;overflow-y:auto;">
                             <?php if ( empty( $all_packages ) ) : ?>
                                 <div style="font-size:12px;color:var(--es-text-muted);">No packages available. <a href="<?php echo esc_url( admin_url( 'admin.php?page=eduschedule-packages' ) ); ?>">Create one</a>.</div>
                             <?php else : foreach ( $all_packages as $pkg ) :
@@ -334,7 +334,7 @@ if ( class_exists( 'GFAPI' ) ) {
                                 $pkg_type_label = array( '1to1' => '1:1', 'group' => 'Group', 'consultancy' => 'Consultancy' )[ $pkg_type ] ?? $pkg_type;
                             ?>
                                 <label class="es-pkg-check-row" data-pkg-type="<?php echo esc_attr( $pkg_type ); ?>"
-                                       style="display:flex;align-items:center;gap:8px;cursor:<?php echo $pkg_owned ? 'not-allowed' : 'pointer'; ?>;font-size:13px;<?php echo $pkg_owned ? 'opacity:0.55;' : ''; ?>"
+                                       style="cursor:<?php echo $pkg_owned ? 'not-allowed' : 'pointer'; ?>;<?php echo $pkg_owned ? 'opacity:0.55;' : ''; ?>"
                                        <?php if ( $pkg_owned ) : ?>title="Student already has this plan active"<?php endif; ?>>
                                     <input type="checkbox" class="es-pkg-check" value="<?php echo (int) $pkg->id; ?>"
                                            data-pkg-type="<?php echo esc_attr( $pkg_type ); ?>"
@@ -342,7 +342,7 @@ if ( class_exists( 'GFAPI' ) ) {
                                            <?php disabled( $pkg_owned ); ?> />
                                     <span>
                                         <strong><?php echo esc_html( $pkg->package_name ); ?></strong>
-                                        <span style="font-size:10px;padding:1px 5px;border-radius:4px;background:<?php echo $pkg_type === 'group' ? '#dbeafe' : '#f3e8ff'; ?>;color:<?php echo $pkg_type === 'group' ? '#1d4ed8' : '#7c3aed'; ?>;margin-left:4px;"><?php echo esc_html( $pkg_type_label ); ?></span>
+                                        <span style="font-size:10px;padding:1px 5px;border-radius:4px;background:<?php echo $pkg_type === 'group' ? 'rgba(0,163,42,0.12)' : 'rgba(34,113,177,0.12)'; ?>;color:<?php echo $pkg_type === 'group' ? '#00622a' : '#2271b1'; ?>;margin-left:4px;"><?php echo esc_html( $pkg_type_label ); ?></span>
                                         <?php if ( $pkg->price > 0 ) : ?><span style="opacity:0.7"> — <?php echo esc_html( ES_Helpers::format_price( $pkg->price, $cur ) ); ?></span><?php endif; ?>
                                         <?php if ( $pkg_owned ) : ?><span class="es-pill es-pill-success" style="margin-left:6px;font-size:10px;vertical-align:middle;">ACTIVE</span><?php endif; ?>
                                     </span>
