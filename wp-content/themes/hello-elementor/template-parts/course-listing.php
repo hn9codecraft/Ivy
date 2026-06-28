@@ -80,7 +80,7 @@ foreach ( $courses as $c ) {
             <!-- SIDEBAR / CATEGORY FILTER -->
             <aside class="es-cl-sidebar" id="esClSidebar">
                 <div class="es-cl-filter-group is-open">
-                    <div id="closebtn">X</div>
+                    <div id="closebtn" class="hide-desktop">X</div>
                     <div class="es-cl-filter-title" role="button" tabindex="0">
                         <span>Category</span>
                         <span class="chev" aria-hidden="true"><img src="<?php echo get_template_directory_uri(); ?>/assets/images/arrow-down.svg"  alt="arrow-down"></span>

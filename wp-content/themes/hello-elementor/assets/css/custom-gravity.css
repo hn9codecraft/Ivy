@@ -11,6 +11,7 @@
   background: #010717;
   min-height: 100vh;
   position:relative;
+  overflow: hidden;
 }
 
 /* ── Wrapper Card ── */
@@ -822,16 +823,10 @@
 #gform_wrapper_1 input[type="submit"]:hover {
   background-color: var(--color-primary-hover);
   border-color: var(--color-primary-hover);
-  transform: translateY(-2px);
   color: #ffffff;
 }
 
-#gform_wrapper_1 .gform_next_button:active,
-#gform_wrapper_1 .gform_button:active,
-#gform_wrapper_1 #gform_submit_button_1:active,
-#gform_wrapper_1 input[type="submit"]:active {
-  transform: translateY(0) !important;
-}
+
 
 /* ── Previous button ── */
 #gform_wrapper_1 .gform_previous_button {
@@ -984,6 +979,16 @@
     width: 100% !important;
     text-align: center !important;
   }
+  #gform_wrapper_1  .gfield--type-radio .gfield_label,
+#gform_wrapper_1 .gfield--type-radio legend.gfield_label,
+#gform_wrapper_1  .gfield--type-choice .gfield_label,
+#gform_wrapper_1 .gfield--type-choice legend.gfield_label,
+#gform_wrapper_1  .gfield--type-select .gfield_label,
+#gform_wrapper_1 .gfield--type-select legend.gfield_label
+ {
+  font-size: 20px !important;
+
+}
 }
 
 @media (max-width: 480px) {
@@ -1009,4 +1014,9 @@
     background-color:#6F6F6F10 !important;
     border-radius: 100px !important;
     height: 8px !important;
+}
+
+.gform-theme--framework .gform-loader{
+      border-block-end-color: #ff2d55 !important;
+    border-inline-start-color: #ff2d55 !important;
 }

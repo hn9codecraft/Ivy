@@ -560,7 +560,7 @@
 
         // Bottom actions
         html += '<div class="es-pcal-actions">';
-        html += '<button type="button" class="btn-primary" data-act="next-step"' + (!hasSel ? ' disabled' : '') + '>';
+        html += '<button type="button" class="btn btn-primary" data-act="next-step"' + (!hasSel ? ' disabled' : '') + '>';
         html += 'Next ' ;
         html += '</button>';
         html += '</div>';
@@ -642,7 +642,7 @@
             html += '<div class="es-pcal-date-card" data-date="' + escapeHtml(date) + '">';
             html += '<div class="es-pcal-date-head">';
             html += '<div class="es-pcal-date-title">' + escapeHtml(pcalFmtDate(date)) + '</div>';
-            html += '<button type="button" class=" btn-primary" data-act="back-to-cal"> Change date</button>';
+            html += '<button type="button" class="btn btn-primary" data-act="back-to-cal"> Change date</button>';
             html += '</div>';
             html += '<div class="es-pcal-slot-grid" data-date="' + escapeHtml(date) + '">';
 
@@ -659,7 +659,7 @@
         // Actions
         html += '<div class="es-pcal-actions">';
         html += '<button type="button" class="es-pcal-icon-btn-lg  btn-link" data-act="back-to-cal">' + ICON.arrowL + '</button>';
-        html += '<button type="button" class="btn-primary" data-act="to-step3">Next </button>';
+        html += '<button type="button" class="btn btn-primary" data-act="to-step3">Next </button>';
         html += '</div>';
 
         PCal.$wrap.html(html);
@@ -784,8 +784,6 @@
         var f = PCal.state.form;
         var html = '<div class="es-pcal-form-wrap">';
         html += '<div class="es-pcal-form-card">';
-        html += '<div class="es-pcal-form-progress-meta">Step 13 of 13</div>';
-        html += '<div class="es-pcal-form-progress"><span></span></div>';
         html += '<div class="es-pcal-field"><label>Parent Name</label><input type="text" data-field="parent_name" value="' + escapeHtml(f.parent_name || [f.first_name, f.last_name].join(' ').trim()) + '"></div>';
         html += '<div class="es-pcal-field"><label>Email Address</label><input type="email" data-field="email" value="' + escapeHtml(f.email) + '"></div>';
         html += '<div class="es-pcal-field"><label>Phone Number</label><input type="text" data-field="phone" value="' + escapeHtml(f.phone || '') + '"></div>';
@@ -801,8 +799,8 @@
         html += '</div></div>';
 
         html += '<div class="es-pcal-actions es-pcal-actions-form">';
-        html += '<button type="button" class="es-pcal-outline-btn" data-act="back-to-slots">Previous</button>';
-        html += '<button type="button" class="es-pcal-btn-primary" data-act="to-step4">Submit</button>';
+        html += '<button type="button" class="btn btn-outline" data-act="back-to-slots">Previous</button>';
+        html += '<button type="button" class="btn btn-primary" data-act="to-step4">Submit</button>';
         html += '</div>';
 
         PCal.$wrap.html(html);
@@ -870,7 +868,7 @@
 
         html += '<div class="es-pcal-actions">';
         html += '<button type="button" class="es-pcal-icon-btn-lg  btn-link" data-act="back-to-form">' + ICON.arrowL + '</button>';
-        html += '<button type="button" class="btn-primary" data-act="submit-booking">Confirm &amp; Book </button>';
+        html += '<button type="button" class="btn btn-primary" data-act="submit-booking">Confirm &amp; Book </button>';
         html += '</div>';
 
         PCal.$wrap.html(html);
@@ -993,7 +991,7 @@
         });
         html += '</div>';
 
-        html += '<button type="button" class="btn-primary" data-act="reload">Make another booking</button>';
+        html += '<button type="button" class="btn btn-primary" data-act="reload">Make another booking</button>';
         html += '</div>';
 
         PCal.$wrap.html(html);

@@ -606,6 +606,7 @@
     max-width: 750px;
     margin: 0 auto;
     box-sizing: border-box;
+    min-height: 75vh;
 }
 .es-pcal-app *, .es-pcal-app *::before, .es-pcal-app *::after { box-sizing: border-box; }
 
@@ -707,6 +708,9 @@
     align-items: center;
     justify-content: center;
     transition: all 0.12s;
+}
+.btn-link.es-pcal-icon-btn{
+    padding: 10px !important;
 }
 .es-pcal-icon-btn:hover:not(:disabled) {
     background: var(--es-pink-soft);
@@ -1163,13 +1167,23 @@
     }
     .es-pcal-actions-form {
         max-width: none;
-        flex-direction: column-reverse;
         align-items: stretch;
     }
     .es-pcal-outline-btn,
     .es-pcal-btn-primary {
         width: 100%;
     }
+    .es-pcal-day{
+        padding: 16px 0px !important;
+        height: 35px;
+        font-size: 10px !important;
+    }
+    .es-pcal-cal {
+        padding: 10px 12px;
+    }
+    .es-pcal-app {
+    padding: 60px 16px;
+}
 }
 
 /* ============= SUCCESS ============= */

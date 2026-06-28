@@ -30,7 +30,6 @@ html {
 }
 
 body {
-  min-height: 100vh;
   font-family: var(--font-primary);
   font-size: var(--text-p);
   font-weight: var(--fw-regular);
@@ -54,7 +53,6 @@ input, button, textarea, select, optgroup {
 
 button {
   background: none;
-  border: none;
   cursor: pointer;
 }
 
@@ -869,7 +867,11 @@ input[type="radio"]:focus-visible {
 .input-sm { height: 38px; font-size: var(--text-sm); padding-inline: var(--sp-3); }
 .input-lg { height: 56px; font-size: var(--text-lg); padding-inline: var(--sp-6); }
 
-
+header {
+    position: sticky;
+    top: 0;
+    z-index: 9999;
+}
 /* ============================================================
    8. COMPONENTS — Cards
    ============================================================ */
