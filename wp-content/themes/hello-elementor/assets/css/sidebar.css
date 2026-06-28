@@ -13,7 +13,6 @@
 .dashboard {
   display: flex;
   align-items: flex-start;
-  min-height: 100vh;
 }
 
 .dashboard__main {
@@ -24,19 +23,20 @@
 /* ---- Sidebar -------------------------------------------- */
 .deshboard-sidebar {
   position: sticky;
-  top: 0;
+  top: 107px;
   flex-shrink: 0;
   width: var(--sidebar-width);
-  height: 100vh;
+ height: 84vh;
   display: flex;
   flex-direction: column;
   gap: var(--sp-2);
   padding: var(--sp-5) var(--sp-4) var(--sp-4);
   background-color: var(--sidebar-bg);
-  border-right: 1px solid var(--color-border);
+  border: 1px solid var(--color-border);
   overflow-y: auto;
-  scrollbar-width: thin;
   z-index: var(--z-sticky);
+  margin: 10px;
+  border-radius: 5px;
 }
 
 .deshboard-sidebar::-webkit-scrollbar { width: 6px; }
@@ -45,12 +45,8 @@
   border-radius: var(--radius-full);
 }
 
-/* ---- Academy switcher (top) ----------------------------- */
-.sidebar__academy {
-  display: flex;
-  align-items: center;
-  gap: var(--sp-3);
-  width: 100%;
+/* ---- Academy group (prominent top accordion) ------------ */
+.sidebar__group--academy > .sidebar__group-toggle {
   padding: var(--sp-3) var(--sp-4);
   border-radius: var(--radius-lg);
   background-color: var(--color-primary-light);
@@ -59,12 +55,17 @@
   font-family: var(--font-heading);
   font-weight: var(--fw-semibold);
   font-size: var(--text-h6);
-  margin-bottom: var(--sp-3);
+  margin-bottom: var(--sp-2);
 }
 
-.sidebar__academy-icon { display: flex; flex-shrink: 0; }
-.sidebar__academy-label { flex: 1; text-align: left; }
-.sidebar__academy-caret { flex-shrink: 0; transition: var(--transition-transform); }
+.sidebar__group--academy > .sidebar__group-toggle:hover {
+  background-color: var(--color-primary-light);
+}
+
+.sidebar__group--academy > .sidebar__group-toggle .sidebar__group-icon,
+.sidebar__group--academy > .sidebar__group-toggle .sidebar__group-caret {
+  color: var(--color-primary);
+}
 
 /* ---- Navigation ----------------------------------------- */
 .sidebar__nav {
@@ -217,8 +218,7 @@
 
 .sidebar__toggle:hover {
   background-color: var(--color-primary-hover);
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-primary-lg);
+  color: #fff;
 }
 
 .sidebar__toggle.is-active { background-color: var(--color-primary-active); }

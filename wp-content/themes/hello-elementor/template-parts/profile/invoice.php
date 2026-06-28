@@ -28,12 +28,7 @@ $invoices = array(
 		<section class="profile">
 
 			<!-- Tabs -->
-			<nav class="profile__tabs" aria-label="<?php esc_attr_e( 'Account sections', 'hello-elementor' ); ?>">
-				<a href="#profile" class="profile__tab"><?php esc_html_e( 'Profile', 'hello-elementor' ); ?></a>
-				<a href="#payment" class="profile__tab"><?php esc_html_e( 'Payment method', 'hello-elementor' ); ?></a>
-				<a href="#invoice" class="profile__tab profile__tab--active"><?php esc_html_e( 'Invoice', 'hello-elementor' ); ?></a>
-				<a href="#package" class="profile__tab"><?php esc_html_e( 'Package detail', 'hello-elementor' ); ?></a>
-			</nav>
+			<?php get_template_part( 'template-parts/profile/profile-tabs', null, array( 'active' => 'invoice' ) ); ?>
 
 			<!-- Invoice table -->
 			<div class="invoice">
@@ -67,6 +62,3 @@ $invoices = array(
 	</main>
 
 </div>
-
-<?php
-get_footer();

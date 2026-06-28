@@ -234,6 +234,117 @@ function custom_theme_styles() {
 add_action('wp_enqueue_scripts', 'custom_theme_styles');
 
 /**
+ * Profile / account section navigation.
+ *
+ * Single source of truth for the four account pages (Profile, Payment method,
+ * Invoice, Package detail). Used by both the profile tab bar
+ * (template-parts/profile/profile-tabs.php) and the dashboard sidebar account
+ * links so labels, slugs and icons only ever live in one place.
+ *
+ * @return array<string,array> Keyed by section id.
+ */
+function ivy_profile_nav_items() {
+	return array(
+		'profile' => array( 'label' => __( 'Profile', 'hello-elementor' ),        'slug' => 'user-profile',   'icon' => 'profile' ),
+		'payment' => array( 'label' => __( 'Payment method', 'hello-elementor' ), 'slug' => 'payment-method', 'icon' => 'payment' ),
+		'invoice' => array( 'label' => __( 'Invoice', 'hello-elementor' ),        'slug' => 'invoice',        'icon' => 'invoice' ),
+		'package' => array( 'label' => __( 'Package detail', 'hello-elementor' ), 'slug' => 'package-detail', 'icon' => 'package' ),
+	);
+}
+
+/**
+ * Front-end URL for a profile section page slug.
+ *
+ * @param string $slug Page slug.
+ * @return string
+ */
+function ivy_profile_url( $slug ) {
+	return home_url( '/' . ltrim( $slug, '/' ) . '/' );
+}
+
+/**
+ * Profile page templates now live in template-parts/profile/. WordPress only
+ * auto-detects page templates one folder deep, so register them explicitly.
+ */
+add_filter( 'theme_page_templates', 'ivy_register_profile_templates' );
+function ivy_register_profile_templates( $templates ) {
+	$templates['template-parts/profile/user-profile.php']   = __( 'User Profile', 'hello-elementor' );
+	$templates['template-parts/profile/payment-method.php'] = __( 'Payment Method', 'hello-elementor' );
+	$templates['template-parts/profile/invoice.php']        = __( 'Invoice', 'hello-elementor' );
+	$templates['template-parts/profile/package-detail.php'] = __( 'Package Detail', 'hello-elementor' );
+	return $templates;
+}
+
+/**
+ * Safety net: load the moved profile templates by basename, so a page keeps
+ * working whether its stored template meta points at the old (template-parts/)
+ * or new (template-parts/profile/) path.
+ */
+add_filter( 'template_include', 'ivy_include_profile_templates' );
+function ivy_include_profile_templates( $template ) {
+	if ( ! is_page() ) {
+		return $template;
+	}
+
+	$assigned = get_page_template_slug( get_queried_object_id() );
+	if ( ! $assigned ) {
+		return $template;
+	}
+
+	$map = array(
+		'user-profile.php'   => 'template-parts/profile/user-profile.php',
+		'payment-method.php' => 'template-parts/profile/payment-method.php',
+		'invoice.php'        => 'template-parts/profile/invoice.php',
+		'package-detail.php' => 'template-parts/profile/package-detail.php',
+	);
+
+	$base = basename( $assigned );
+	if ( isset( $map[ $base ] ) ) {
+		$located = get_theme_file_path( $map[ $base ] );
+		if ( file_exists( $located ) ) {
+			return $located;
+		}
+	}
+
+	return $template;
+}
+
+/**
+ * One-time migration: repoint pages that still reference the old (root)
+ * template paths to the new template-parts/profile/ paths, so the wp-admin
+ * Page Attributes dropdown also shows the correct template.
+ */
+add_action( 'admin_init', 'ivy_migrate_profile_templates' );
+function ivy_migrate_profile_templates() {
+	if ( get_option( 'ivy_profile_templates_migrated' ) ) {
+		return;
+	}
+
+	$map = array(
+		'template-parts/user-profile.php'   => 'template-parts/profile/user-profile.php',
+		'template-parts/payment-method.php' => 'template-parts/profile/payment-method.php',
+		'template-parts/invoice.php'        => 'template-parts/profile/invoice.php',
+		'template-parts/package-detail.php' => 'template-parts/profile/package-detail.php',
+	);
+
+	foreach ( $map as $old => $new ) {
+		$pages = get_posts( array(
+			'post_type'      => 'page',
+			'post_status'    => 'any',
+			'posts_per_page' => -1,
+			'meta_key'       => '_wp_page_template',
+			'meta_value'     => $old,
+			'fields'         => 'ids',
+		) );
+		foreach ( $pages as $pid ) {
+			update_post_meta( $pid, '_wp_page_template', $new );
+		}
+	}
+
+	update_option( 'ivy_profile_templates_migrated', 1 );
+}
+
+/**
  * [es_course_listing] — course list page.
  * Markup lives in template-parts/course-listing.php, styles in
  * assets/css/course-list.css. Moved here from the eduschedule plugin.
