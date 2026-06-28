@@ -80,9 +80,10 @@ foreach ( $courses as $c ) {
             <!-- SIDEBAR / CATEGORY FILTER -->
             <aside class="es-cl-sidebar" id="esClSidebar">
                 <div class="es-cl-filter-group is-open">
+                    <div id="closebtn">X</div>
                     <div class="es-cl-filter-title" role="button" tabindex="0">
                         <span>Category</span>
-                        <span class="chev" aria-hidden="true">▾</span>
+                        <span class="chev" aria-hidden="true"><img src="<?php echo get_template_directory_uri(); ?>/assets/images/arrow-down.svg"  alt="arrow-down"></span>
                     </div>
                     <div class="es-cl-filter-body">
                         <?php if ( ! empty( $cat_terms ) ) : ?>
@@ -102,14 +103,14 @@ foreach ( $courses as $c ) {
                 <div class="es-cl-filter-group is-open">
                     <div class="es-cl-filter-title" role="button" tabindex="0">
                         <span>Rating</span>
-                        <span class="chev" aria-hidden="true">▾</span>
+                        <span class="chev" aria-hidden="true"><img src="<?php echo get_template_directory_uri(); ?>/assets/images/arrow-down.svg"  alt="arrow-down"></span>
                     </div>
                     <div class="es-cl-filter-body">
                         <?php foreach ( array( '4.5', '4.0', '3.5', '3.0' ) as $r ) : ?>
                             <label class="es-cl-check es-cl-rating-opt">
                                 <input type="radio" name="es-cl-rating" class="es-cl-rating-filter" value="<?php echo esc_attr( $r ); ?>" />
                                 <span class="es-cl-rating-star" aria-hidden="true">★</span>
-                                <span class="es-cl-check-label"><?php echo esc_html( $r ); ?> &amp; up</span>
+                                <span class="es-cl-check-label"><?php echo esc_html( $r ); ?> + Rating</span>
                             </label>
                         <?php endforeach; ?>
                         <label class="es-cl-check es-cl-rating-opt">
@@ -130,12 +131,6 @@ foreach ( $courses as $c ) {
                             <span class="es-cl-filter-ico" aria-hidden="true">⚙</span> Filter
                         </button>
                         <span class="es-cl-count"><?php echo (int) $total; ?> Courses</span>
-                    </div>
-                    <div class="es-cl-toolbar-right">
-                        <div class="es-cl-view" aria-label="View as">
-                            <button type="button" class="is-active" title="Grid view" aria-label="Grid view">▦</button>
-                            <button type="button" title="List view" aria-label="List view">≣</button>
-                        </div>
                     </div>
                 </div>
 
@@ -221,7 +216,7 @@ foreach ( $courses as $c ) {
                                 </div>
                                 <?php endif; ?>
 
-                                <p class="es-cl-author"><?php echo esc_html( $creator ); ?> </p>
+                                <p class="es-cl-author"><strong>Course by</strong> <?php echo esc_html( $creator ); ?> </p>
 
                                 <?php if ( $rating > 0 ) : ?>
                                     <div class="es-cl-rating">
@@ -254,9 +249,13 @@ foreach ( $courses as $c ) {
 
     // Mobile: toggle the whole sidebar with the Filter button
     var toggle = document.getElementById('esClFilterToggle');
+        var closeBtn = document.getElementById('closebtn');
     var sidebar = document.getElementById('esClSidebar');
     if (toggle && sidebar) {
         toggle.addEventListener('click', function () {
+            sidebar.classList.toggle('is-mobile-open');
+        });
+          closeBtn.addEventListener('click', function () {
             sidebar.classList.toggle('is-mobile-open');
         });
     }

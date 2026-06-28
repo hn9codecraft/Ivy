@@ -45,8 +45,8 @@ $base = admin_url( 'admin.php?page=eduschedule-packages' );
 
     <!-- 1:1 Packages Section -->
     <div class="es-pkg-section-label" style="margin-top:28px;margin-bottom:4px;display:flex;align-items:center;gap:10px;">
-        <span style="font-size:18px;font-weight:700;color:#6366f1;">🎯 1:1 Packages</span>
-        <span class="es-pill" style="background:#f3e8ff;color:#7c3aed;font-size:11px;"><?php echo count( $pkgs_1to1 ); ?></span>
+        <span style="font-size:18px;font-weight:700;color:#2271b1;">🎯 1:1 Packages</span>
+        <span class="es-pill es-pill-info" style="font-size:11px;"><?php echo count( $pkgs_1to1 ); ?></span>
     </div>
     <div class="es-packages-grid">
         <?php if ( empty( $pkgs_1to1 ) ) : ?>
@@ -64,7 +64,7 @@ $base = admin_url( 'admin.php?page=eduschedule-packages' );
                         <?php if ( ! empty( $pkg->sub_heading ) ) : ?>
                             <p class="es-package-sub"><?php echo esc_html( $pkg->sub_heading ); ?></p>
                         <?php endif; ?>
-                        <span class="es-pill" style="font-size:10px;margin-top:4px;display:inline-block;background:#eef2ff;color:#3730a3;"><?php echo esc_html( $pkg_type_label ); ?></span>
+                        <span class="es-pill es-pill-info" style="font-size:10px;margin-top:4px;display:inline-block;"><?php echo esc_html( $pkg_type_label ); ?></span>
                     </div>
                     <div class="es-package-actions">
                         <button type="button" class="es-btn es-btn-sm es-btn-ghost es-edit-package" data-id="<?php echo (int) $pkg->id; ?>">
@@ -144,8 +144,8 @@ $base = admin_url( 'admin.php?page=eduschedule-packages' );
 
     <!-- Group Packages Section -->
     <div class="es-pkg-section-label" style="margin-top:32px;margin-bottom:4px;display:flex;align-items:center;gap:10px;">
-        <span style="font-size:18px;font-weight:700;color:#10b981;">👥 Group Packages</span>
-        <span class="es-pill" style="background:#ecfdf5;color:#047857;font-size:11px;"><?php echo count( $pkgs_group ); ?></span>
+        <span style="font-size:18px;font-weight:700;color:#00a32a;">👥 Group Packages</span>
+        <span class="es-pill es-pill-success" style="font-size:11px;"><?php echo count( $pkgs_group ); ?></span>
     </div>
     <div class="es-packages-grid">
         <?php if ( empty( $pkgs_group ) ) : ?>
@@ -163,7 +163,7 @@ $base = admin_url( 'admin.php?page=eduschedule-packages' );
                         <?php if ( ! empty( $pkg->sub_heading ) ) : ?>
                             <p class="es-package-sub"><?php echo esc_html( $pkg->sub_heading ); ?></p>
                         <?php endif; ?>
-                        <span class="es-pill" style="font-size:10px;margin-top:4px;display:inline-block;background:#ecfdf5;color:#047857;"><?php echo esc_html( $pkg_type_label ); ?></span>
+                        <span class="es-pill es-pill-success" style="font-size:10px;margin-top:4px;display:inline-block;"><?php echo esc_html( $pkg_type_label ); ?></span>
                     </div>
                     <div class="es-package-actions">
                         <button type="button" class="es-btn es-btn-sm es-btn-ghost es-edit-package" data-id="<?php echo (int) $pkg->id; ?>">
@@ -238,8 +238,8 @@ $base = admin_url( 'admin.php?page=eduschedule-packages' );
     <?php if ( ! empty( $pkgs_other ) ) : ?>
     <!-- Other Packages -->
     <div class="es-pkg-section-label" style="margin-top:32px;margin-bottom:4px;display:flex;align-items:center;gap:10px;">
-        <span style="font-size:18px;font-weight:700;color:#8b5cf6;">💼 Other Packages</span>
-        <span class="es-pill" style="background:#f5f3ff;color:#6d28d9;font-size:11px;"><?php echo count( $pkgs_other ); ?></span>
+        <span style="font-size:18px;font-weight:700;color:#2271b1;">💼 Other Packages</span>
+        <span class="es-pill es-pill-info" style="font-size:11px;"><?php echo count( $pkgs_other ); ?></span>
     </div>
     <div class="es-packages-grid">
         <?php foreach ( $pkgs_other as $pkg ) :
@@ -253,7 +253,7 @@ $base = admin_url( 'admin.php?page=eduschedule-packages' );
                         <?php if ( ! empty( $pkg->sub_heading ) ) : ?>
                             <p class="es-package-sub"><?php echo esc_html( $pkg->sub_heading ); ?></p>
                         <?php endif; ?>
-                        <span class="es-pill" style="font-size:10px;margin-top:4px;display:inline-block;background:#eef2ff;color:#3730a3;"><?php echo esc_html( $pkg_type_label ); ?></span>
+                        <span class="es-pill es-pill-info" style="font-size:10px;margin-top:4px;display:inline-block;"><?php echo esc_html( $pkg_type_label ); ?></span>
                     </div>
                     <div class="es-package-actions">
                         <button type="button" class="es-btn es-btn-sm es-btn-ghost es-edit-package" data-id="<?php echo (int) $pkg->id; ?>">Edit</button>
@@ -283,22 +283,22 @@ $base = admin_url( 'admin.php?page=eduschedule-packages' );
 <div class="es-modal" id="es-package-modal" style="display:none">
     <div class="es-modal-backdrop"></div>
     <div class="es-modal-card es-modal-lg" style="max-width:680px;">
-        <div class="es-modal-head" style="background:linear-gradient(135deg,#6366f1 0%,#818cf8 100%);padding:24px 28px;">
+        <div class="es-modal-head">
             <div>
-                <div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:rgba(255,255,255,.75);margin-bottom:4px;">Packages</div>
-                <h2 id="es-pkg-modal-title" style="color:#fff;margin:0;font-size:22px;font-weight:700;letter-spacing:-.3px;">Create Package</h2>
+                <div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#646970;margin-bottom:4px;">Packages</div>
+                <h2 id="es-pkg-modal-title">Create Package</h2>
             </div>
-            <button type="button" class="es-modal-close" aria-label="Close" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);color:#fff;border-radius:12px;width:36px;height:36px;font-size:20px;cursor:pointer;display:flex;align-items:center;justify-content:center;">×</button>
+            <button type="button" class="es-modal-close" aria-label="Close">×</button>
         </div>
         <div class="es-modal-body" style="padding:28px 28px 20px;">
             <input type="hidden" id="es-pkg-id" value="" />
 
             <!-- Section: Identity -->
             <div style="margin-bottom:24px;">
-                <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#6366f1;font-weight:700;margin-bottom:14px;padding-bottom:8px;border-bottom:2px solid #eef2ff;">📋 Package Identity</div>
+                <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#2271b1;font-weight:700;margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid #dcdcde;">📋 Package Identity</div>
                 <div class="es-modal-row">
                     <div class="es-field">
-                        <label class="es-label">Package Name <span style="color:#e53e3e;">*</span></label>
+                        <label class="es-label">Package Name <span style="color:#d63638;">*</span></label>
                         <input type="text" id="es-pkg-name" placeholder="e.g. Premium IELTS Coaching" />
                     </div>
                     <div class="es-field">
@@ -309,7 +309,7 @@ $base = admin_url( 'admin.php?page=eduschedule-packages' );
                 <div class="es-modal-row" style="margin-top:14px;">
                     <div class="es-field">
                         <label class="es-label">Package Type</label>
-                        <select id="es-pkg-type" style="width:100%;padding:10px 12px;border:1.5px solid #e2e8f0;border-radius:10px;font-size:14px;background:#fff;cursor:pointer;">
+                        <select id="es-pkg-type" style="width:100%;cursor:pointer;">
                             <option value="1to1">🎯 1:1 (One-on-One)</option>
                             <option value="group">👥 Group</option>
                             <option value="consultancy">💼 Consultancy</option>
@@ -325,7 +325,7 @@ $base = admin_url( 'admin.php?page=eduschedule-packages' );
 
             <!-- Section: Pricing -->
             <div style="margin-bottom:24px;">
-                <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#10b981;font-weight:700;margin-bottom:14px;padding-bottom:8px;border-bottom:2px solid #ecfdf5;">💰 Pricing</div>
+                <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#2271b1;font-weight:700;margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid #dcdcde;">💰 Pricing</div>
                 <div class="es-modal-row">
                     <div class="es-field">
                         <label class="es-label">Currency</label>
@@ -347,7 +347,7 @@ $base = admin_url( 'admin.php?page=eduschedule-packages' );
 
             <!-- Section: Sessions -->
             <div style="margin-bottom:24px;">
-                <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#f59e0b;font-weight:700;margin-bottom:14px;padding-bottom:8px;border-bottom:2px solid #fffbeb;">🗓 Sessions & Duration</div>
+                <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#2271b1;font-weight:700;margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid #dcdcde;">🗓 Sessions & Duration</div>
                 <div class="es-modal-row">
                     <div class="es-field">
                         <label class="es-label">Duration (Months)</label>
@@ -376,19 +376,19 @@ $base = admin_url( 'admin.php?page=eduschedule-packages' );
 
                 <!-- Auto-calculated summary -->
                 <div class="es-field" style="margin-top:14px;">
-                    <div style="padding:14px 18px;background:linear-gradient(135deg,rgba(99,102,241,.07),rgba(16,185,129,.07));border:1px solid rgba(99,102,241,.2);border-radius:12px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:16px;">
+                    <div style="padding:14px 18px;background:#f6f7f7;border:1px solid #dcdcde;border-radius:4px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:16px;">
                         <div style="display:flex;align-items:center;gap:12px;">
-                            <div style="width:40px;height:40px;background:#6366f1;border-radius:10px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;">₹</div>
+                            <div style="width:40px;height:40px;background:#2271b1;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;">₹</div>
                             <div>
-                                <div style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#6b7280;font-weight:600;">Total Package Price</div>
-                                <div id="es-pkg-calc-total" style="font-size:24px;font-weight:800;color:#6366f1;letter-spacing:-.5px;">—</div>
+                                <div style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#646970;font-weight:600;">Total Package Price</div>
+                                <div id="es-pkg-calc-total" style="font-size:24px;font-weight:800;color:#2271b1;letter-spacing:-.5px;">—</div>
                             </div>
                         </div>
                         <div style="display:flex;align-items:center;gap:12px;">
-                            <div style="width:40px;height:40px;background:#10b981;border-radius:10px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;">✓</div>
+                            <div style="width:40px;height:40px;background:#00a32a;border-radius:4px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;">✓</div>
                             <div>
-                                <div style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#6b7280;font-weight:600;">Total Sessions</div>
-                                <div id="es-pkg-calc-sessions" style="font-size:24px;font-weight:800;color:#10b981;letter-spacing:-.5px;">—</div>
+                                <div style="font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:#646970;font-weight:600;">Total Sessions</div>
+                                <div id="es-pkg-calc-sessions" style="font-size:24px;font-weight:800;color:#00a32a;letter-spacing:-.5px;">—</div>
                             </div>
                         </div>
                     </div>
@@ -413,7 +413,7 @@ $base = admin_url( 'admin.php?page=eduschedule-packages' );
 
             <!-- Section: Details -->
             <div style="margin-bottom:8px;">
-                <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#8b5cf6;font-weight:700;margin-bottom:14px;padding-bottom:8px;border-bottom:2px solid #f5f3ff;">📝 Details</div>
+                <div style="font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:#2271b1;font-weight:700;margin-bottom:14px;padding-bottom:8px;border-bottom:1px solid #dcdcde;">📝 Details</div>
                 <div class="es-modal-row">
                     <div class="es-field">
                         <label class="es-label">Display Order</label>
