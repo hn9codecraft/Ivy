@@ -936,7 +936,10 @@
                 action: 'es_book_slot',
                 nonce: ES_FE.nonce,
                 slot_id: slotId,
-                note: PCal.state.form.topic
+                note: PCal.state.form.topic,
+                parent_name: PCal.state.form.parent_name || '',
+                email: PCal.state.form.email || '',
+                phone: PCal.state.form.phone || ''
             }).done(function (json) {
                 if (json.success) {
                     results.push({ date: date, ok: true, data: json.data });

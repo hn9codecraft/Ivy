@@ -571,3 +571,12 @@ function vworks_redirect_comments_page() {
     }
 }
 add_action('admin_init', 'vworks_redirect_comments_page');
+
+
+add_filter('acf/fields/relationship/query', function($args, $field, $post_id) {
+
+    $args['post__not_in'] = array($post_id);
+
+    return $args;
+
+}, 10, 3);

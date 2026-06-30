@@ -457,9 +457,28 @@ class ES_Ajax {
 
         $slot_id = isset( $_POST['slot_id'] ) ? (int) $_POST['slot_id'] : 0;
         $note    = isset( $_POST['note'] ) ? sanitize_textarea_field( wp_unslash( $_POST['note'] ) ) : '';
+        $parent  = isset( $_POST['parent_name'] ) ? sanitize_text_field( wp_unslash( $_POST['parent_name'] ) ) : '';
+        $email   = isset( $_POST['email'] ) ? sanitize_email( wp_unslash( $_POST['email'] ) ) : '';
+        $phone   = isset( $_POST['phone'] ) ? sanitize_text_field( wp_unslash( $_POST['phone'] ) ) : '';
         $uid = get_current_user_id();
         if ( ! $uid ) wp_send_json_error( array( 'message' => 'Please log in first.' ) );
         if ( ! $slot_id ) wp_send_json_error( array( 'message' => 'No slot was selected.' ) );
+
+        if ( $parent !== '' ) {
+            update_user_meta( $uid, 'es_parent_name', $parent );
+        }
+        if ( $phone !== '' ) {
+            update_user_meta( $uid, 'es_phone', $phone );
+        }
+        if ( $email !== '' ) {
+            $current_user = get_userdata( $uid );
+            if ( $current_user && strtolower( (string) $current_user->user_email ) !== strtolower( $email ) ) {
+                wp_update_user( array(
+                    'ID'         => $uid,
+                    'user_email' => $email,
+                ) );
+            }
+        }
 
         $slot = ES_DB::get_slot( $slot_id );
         if ( ! $slot ) wp_send_json_error( array( 'message' => 'Slot not found.' ) );
