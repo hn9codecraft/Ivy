@@ -218,11 +218,16 @@ if ( class_exists( 'GFAPI' ) ) {
 
                 <div class="es-section-label">Contact & Details</div>
                 <div class="es-card" style="padding:16px 18px;margin-bottom:18px;">
-                    <?php $detail_parent = ! empty( $student['parent_name'] ) ? $student['parent_name'] : ( $gf_data['Parent Name'] ?? '' ); ?>
+                    <?php $detail_email  = $gf_data['Email Address'] ?? $student['email']; ?>
+                    <?php $detail_phone  = $gf_data['Phone Number'] ?? $student['phone']; ?>
+                    <?php $detail_parent = $gf_data['Parent Name'] ?? ( ! empty( $student['parent_name'] ) ? $student['parent_name'] : '' ); ?>
+                    <?php $student['email'] = $detail_email; ?>
+                    <?php $student['phone'] = $detail_phone; ?>
+                    <?php $student['parent_name'] = $detail_parent; ?>
                     <?php $detail_source = ! empty( $student['reference'] ) ? ucfirst( $student['reference'] ) : ( $gf_data['Source'] ?? '' ); ?>
                     <?php $detail_goal   = $gf_data['What is your primary goal for your scholar today?'] ?? ''; ?>
                     <?php $detail_level  = $gf_data["What is the student's current academic level?"] ?? ''; ?>
-                    <div class="es-detail-row"><span>Email</span><div style="text-align:right;"><a href="mailto:<?php echo esc_attr( $student['email'] ); ?>"><?php echo esc_html( $student['email'] ); ?></a></div></div>
+                    <div class="es-detail-row"><span>Email</span><div style="text-align:right;"><?php echo ! empty( $detail_email ) ? '<a href="mailto:' . esc_attr( $detail_email ) . '">' . esc_html( $detail_email ) . '</a>' : '<span style="color:#9ca3af;">--</span>'; ?></div></div>
                     <div class="es-detail-row"><span>Phone</span><div style="text-align:right;"><?php echo ! empty( $student['phone'] ) ? esc_html( $student['phone'] ) : '<span style="color:#9ca3af;">—</span>'; ?></div></div>
                     <?php if ( $detail_parent !== '' ) : ?><div class="es-detail-row"><span>Parent</span><div style="text-align:right;"><?php echo esc_html( $detail_parent ); ?></div></div><?php endif; ?>
                     <?php if ( $detail_source !== '' ) : ?><div class="es-detail-row"><span>Source</span><div style="text-align:right;"><?php echo esc_html( $detail_source ); ?></div></div><?php endif; ?>

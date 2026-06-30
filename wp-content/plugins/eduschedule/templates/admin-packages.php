@@ -282,15 +282,15 @@ $base = admin_url( 'admin.php?page=eduschedule-packages' );
 <!-- Add/Edit Package Modal -->
 <div class="es-modal" id="es-package-modal" style="display:none">
     <div class="es-modal-backdrop"></div>
-    <div class="es-modal-card es-modal-lg" style="max-width:680px;">
+    <div class="es-modal-card es-modal-lg es-pkg-modal-card" style="max-width:760px;">
         <div class="es-modal-head">
             <div>
-                <div style="font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:#646970;margin-bottom:4px;">Packages</div>
+                <div class="es-pkg-modal-kicker">Packages</div>
                 <h2 id="es-pkg-modal-title">Create Package</h2>
             </div>
             <button type="button" class="es-modal-close" aria-label="Close">×</button>
         </div>
-        <div class="es-modal-body" style="padding:28px 28px 20px;">
+        <div class="es-modal-body es-pkg-modal-body">
             <input type="hidden" id="es-pkg-id" value="" />
 
             <!-- Section: Identity -->
@@ -395,20 +395,6 @@ $base = admin_url( 'admin.php?page=eduschedule-packages' );
                     <small class="es-field-hint">Total Price = Monthly Price × Months &nbsp;·&nbsp; Total Sessions = Monthly Limit × Months</small>
                 </div>
             </div>
-                <div class="es-modal-row" style="margin-top:14px;">
-                    <div class="es-field">
-                        <label class="es-label">Discount %</label>
-                        <input type="number" id="es-pkg-discount-percent" placeholder="12" step="0.1" min="0" max="100" />
-                        <small class="es-field-hint">Optional. For frontend discounted plan toggle.</small>
-                    </div>
-                    <div class="es-field">
-                        <label class="es-label">Discount Months</label>
-                        <input type="number" id="es-pkg-discount-months" placeholder="6" step="1" min="0" max="60" />
-                        <small class="es-field-hint">e.g. 12% off for 6 months.</small>
-                    </div>
-                </div>
-            </div>
-
           
 
             <!-- Section: Details -->

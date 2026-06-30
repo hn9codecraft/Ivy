@@ -5,11 +5,11 @@
 <IfModule mod_rewrite.c>
 RewriteEngine On
 RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
-RewriteBase /ivy/
+RewriteBase /projects/ivyquest/Ivy/
 RewriteRule ^index\.php$ - [L]
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteCond %{REQUEST_FILENAME} !-d
-RewriteRule . /ivy/index.php [L]
+RewriteRule . /projects/ivyquest/Ivy/index.php [L]
 </IfModule>
 
 # END WordPress
