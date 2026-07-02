@@ -186,7 +186,8 @@
   .profile__layout { grid-template-columns: 1fr; }
 
   .profile__card {
-    max-width: 420px;
+    max-width: 100%;
+    width: 100%;
     margin-inline: auto;
   }
 
@@ -268,7 +269,7 @@
 /* Responsive */
 @media (max-width: 900px) {
   .payment__card { flex-wrap: wrap; gap: var(--sp-6); }
-  .payment__details { order: 3; width: 100%; flex-basis: 100%; }
+  .payment__details {  width: 100%; flex-basis: 100%; }
   .payment__change { margin-left: auto; }
 }
 
@@ -362,6 +363,7 @@
     content: attr(data-label);
     font-weight: var(--fw-medium);
     color: var(--color-text-secondary);
+    padding-right: 20px;
   }
 
   .invoice__table .invoice__col-action { justify-content: flex-end; }

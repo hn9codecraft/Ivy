@@ -37,8 +37,8 @@ $nav_tree = array(
 				'icon'     => 'one',
 				'open'     => true,
 				'children' => array(
-					array( 'label' => __( 'tutee Progress', 'hello-elementor' ), 'url' => '#' ),
-					array( 'label' => __( 'Schedule and attendace', 'hello-elementor' ), 'url' => '#' ),
+					array( 'label' => __( 'Tutee Progress', 'hello-elementor' ), 'url' => '#' ),
+					array( 'label' => __( 'Schedule and Attendace', 'hello-elementor' ), 'url' => '#' ),
 				),
 			),
 			array(
@@ -46,8 +46,8 @@ $nav_tree = array(
 				'icon'     => 'group',
 				'open'     => true,
 				'children' => array(
-					array( 'label' => __( 'tutee Progress', 'hello-elementor' ), 'url' => '#' ),
-					array( 'label' => __( 'Schedule and attendace', 'hello-elementor' ), 'url' => '#' ),
+					array( 'label' => __( 'Tutee Progress', 'hello-elementor' ), 'url' => '#' ),
+					array( 'label' => __( 'Schedule and Attendace', 'hello-elementor' ), 'url' => '#' ),
 				),
 			),
 		),
@@ -140,12 +140,11 @@ if ( ! function_exists( 'iq_sidebar_render_node' ) ) {
 
 <a href="#" type="button" class="sidebar-mobile-toggle" id="sidebarMobileToggle" aria-label="<?php esc_attr_e( 'Open menu', 'hello-elementor' ); ?>" aria-controls="dashboardSidebar" aria-expanded="false">
 	<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M3 6h18M3 12h18M3 18h18"></path></svg>
-</a>
+</a> 
 
 <div class="sidebar__backdrop" id="sidebarBackdrop"></div>
 
 <aside class="deshboard-sidebar" id="dashboardSidebar" aria-label="<?php esc_attr_e( 'Dashboard navigation', 'hello-elementor' ); ?>">
-
 	<!-- Navigation -->
 	<nav class="sidebar__nav">
 		<?php foreach ( $nav_tree as $node ) {
